@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>velocity_controller</name>
+  <name>controller</name>
   <version>0.0.0</version>
-  <description>The velocity_controller package</description>
+  <description>The controller package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -51,7 +51,7 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>mavlink</build_depend>
   <build_depend>mavros</build_depend>
-  <build_depend>mavros_extra</build_depend>
+  <build_depend>mavros_extras</build_depend>
   <build_depend>mavros_msgs</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>

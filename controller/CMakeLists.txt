@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(velocity_controller)
+project(controller)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -10,7 +10,7 @@ project(velocity_controller)
 find_package(catkin REQUIRED COMPONENTS
   mavlink
   mavros
-  mavros_extra
+  mavros_extras
   mavros_msgs
   roscpp
   rospy

@@ -10,7 +10,7 @@ project(fsm)
 find_package(catkin REQUIRED COMPONENTS
   mavlink
   mavros
-  mavros_extra
+  mavros_extras
   mavros_msgs
   roscpp
   rospy
