@@ -54,21 +54,7 @@ class ControllerNode(object):
 
         self.setpoint_msg = PositionTarget()
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
-        self.setpoint_msg.type_mask = PositionTarget.IGNORE_PX \
-                                    + PositionTarget.IGNORE_PY \
-                                    + PositionTarget.IGNORE_PX \
-                                    + 0*PositionTarget.IGNORE_VX \
-                                    + 0*PositionTarget.IGNORE_VY \
-                                    + 0*PositionTarget.IGNORE_VZ \
-                                    + PositionTarget.IGNORE_AFX \
-                                    + PositionTarget.IGNORE_AFY \
-                                    + PositionTarget.IGNORE_AFZ \
-                                    + PositionTarget.IGNORE_YAW \
-                                    + 0*PositionTarget.IGNORE_YAW_RATE
-        self.setpoint_msg.velocity.x = 0
-        self.setpoint_msg.velocity.y = 0
-        self.setpoint_msg.velocity.z = 0
-        self.setpoint_msg.yaw_rate = 0
+        self.set_position_command(0,0,0,0)
         self.state = State()
 
         # Send setpoints in seperate thread to better prevent failsafe
@@ -85,10 +71,17 @@ class ControllerNode(object):
         self.ready_topics['imu'] = True
 
     def send_setpoint(self):
+        """
+        This function runs in a seperate thread, sending setpoint commands to 
+        the FCU at 10Hz.
+
+        This is performed by reading the class internal variable `setpoint_msg`,
+        and continuously sending its value to the FCU.
+        """
         rate = rospy.Rate(10)  # Hz
         self.setpoint_msg.header = Header()
         self.setpoint_msg.header.frame_id = "base_footprint"
-        self.ready_thread = True
+        self.ready_thread = True # Thread is ready.
         while not rospy.is_shutdown():
             self.setpoint_msg.header.stamp = rospy.Time.now()
             self.setpoint_pub.publish(self.setpoint_msg)
@@ -96,30 +89,15 @@ class ControllerNode(object):
                 rate.sleep()
             except rospy.ROSInterruptException:
                 pass
-            print(self.setpoint_msg.velocity)
-            print(self.setpoint_msg.yaw_rate)
 
     def start(self):
         preflight_passed = self.preflight_check()
         if preflight_passed:
-            rospy.loginfo("Preflight check passed.")
+            rospy.loginfo("IFO_CORE: Preflight check passed.")
             self.takeoff()
-            sleep(10)
-            self.set_velocity_command(vx = 1)
-            sleep(1)            
-            self.set_velocity_command(vy = 1)
-            sleep(1)
-            self.set_velocity_command(vx = -1)
-            sleep(1)
-            self.set_velocity_command(vy = -1)
-            sleep(1)
-            self.set_velocity_command()
-            self.land()
-            rospy.loginfo("Mission complete.")
         else:
             rospy.loginfo("Preflight check failed.")
             
-
 
     def preflight_check(self, timeout = 30):
         # Checks to implement?
@@ -153,59 +131,115 @@ class ControllerNode(object):
         # TODO. Add feedback
         self.set_mode('OFFBOARD',3)
         self.set_arm(True, 3)
-        self.set_velocity_command(vz = 1)    
-    
+        self.set_position_command(pz = 1)
+        sleep(15)
+        self.set_position_command(px = 1, pz =1, yaw = 3.14159/2)
+        sleep(15)
+        self.set_position_command(pz =1)
+        sleep(10)
+        self.land()
+   
     def land(self):
         self.set_velocity_command(vz = -1)    
     
     def set_mode(self, mode, timeout):
-        """mode: PX4 mode string, timeout(int): seconds"""
+        """ 
+        Sets the FCU flight mode.
+
+        mode: PX4 mode string
+        timeout(int): seconds
+        """
         rospy.loginfo("setting FCU mode: {0}".format(mode))
         loop_freq = 1  # Hz
         rate = rospy.Rate(loop_freq)
-        mode_set = False
+        set_success = False
         for i in xrange(timeout * loop_freq):
             if self.state.mode == mode:
-                mode_set = True
-                rospy.loginfo("set mode success | seconds: {0} of {1}".format(
+                set_success = True
+                rospy.loginfo("IFO_CORE: set mode success | seconds: {0} of {1}".format(
                     i / loop_freq, timeout))
                 break
             else:
                 try:
                     res = self.set_mode_srv(0, mode)  # 0 is custom mode
                     if not res.mode_sent:
-                        rospy.logerr("failed to send mode command")
+                        rospy.logerr("IFO_CORE: failed to send mode command.")
                 except rospy.ServiceException as e:
                     rospy.logerr(e)
 
             rate.sleep()
-        return mode_set
+        return set_success
 
     def set_arm(self, arm, timeout):
-        """arm: True to arm or False to disarm, timeout(int): seconds"""
+        """
+        Sets the arming mode of the FCU.
+        arm: True to arm or False to disarm
+        timeout(int): seconds
+        """
         rospy.loginfo("setting FCU arm: {0}".format(arm))
         loop_freq = 1  # Hz
         rate = rospy.Rate(loop_freq)
+        set_success = False
         for i in xrange(timeout * loop_freq):
             if self.state.armed == arm:
-                rospy.loginfo("set arm success | seconds: {0} of {1}".format(
+                rospy.loginfo("ifo_core: set arm success | seconds: {0} of {1}".format(
                     i / loop_freq, timeout))
-                break
+                set_success = True
+                break     
             else:
                 try:
                     res = self.set_arming_srv(arm)
                     if not res.success:
-                        rospy.logerr("failed to send arm command")
+                        rospy.logerr("ifo_core: arming failed.")
                 except rospy.ServiceException as e:
                     rospy.logerr(e)
 
             rate.sleep()
+        return set_success
 
     def set_velocity_command(self, vx = 0, vy = 0, vz = 0, yr = 0):
+        """ 
+        Sets the velocity command to the internal setpoint_msg variable.
+        A seperate thread sends the setpoint_msg to the PX4 controller.
+        """
+        self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
+        self.setpoint_msg.type_mask = PositionTarget.IGNORE_PX \
+                                    + PositionTarget.IGNORE_PY \
+                                    + PositionTarget.IGNORE_PZ \
+                                    + 0*PositionTarget.IGNORE_VX \
+                                    + 0*PositionTarget.IGNORE_VY \
+                                    + 0*PositionTarget.IGNORE_VZ \
+                                    + PositionTarget.IGNORE_AFX \
+                                    + PositionTarget.IGNORE_AFY \
+                                    + PositionTarget.IGNORE_AFZ \
+                                    + PositionTarget.IGNORE_YAW \
+                                    + 0*PositionTarget.IGNORE_YAW_RATE
         self.setpoint_msg.velocity.x = vx
         self.setpoint_msg.velocity.y = vy
         self.setpoint_msg.velocity.z = vz
         self.setpoint_msg.yaw_rate = yr
+
+    def set_position_command(self, px = 0, py = 0, pz = 0, yaw = 0):
+        """ 
+        Sets the position command to the internal setpoint_msg variable.
+        A seperate thread sends the setpoint_msg to the PX4 controller.
+        """
+        self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
+        self.setpoint_msg.type_mask = 0*PositionTarget.IGNORE_PX \
+                                    + 0*PositionTarget.IGNORE_PY \
+                                    + 0*PositionTarget.IGNORE_PZ \
+                                    + PositionTarget.IGNORE_VX \
+                                    + PositionTarget.IGNORE_VY \
+                                    + PositionTarget.IGNORE_VZ \
+                                    + PositionTarget.IGNORE_AFX \
+                                    + PositionTarget.IGNORE_AFY \
+                                    + PositionTarget.IGNORE_AFZ \
+                                    + 0*PositionTarget.IGNORE_YAW \
+                                    + PositionTarget.IGNORE_YAW_RATE
+        self.setpoint_msg.position.x = px
+        self.setpoint_msg.position.y = py
+        self.setpoint_msg.position.z = pz
+        self.setpoint_msg.yaw = yaw
 
 
 if __name__ == "__main__":
