@@ -14,14 +14,22 @@ class ControllerNode(object):
     This class starts a thread which continuously publishes its own 
     `setpoint_msg` property on the /mavros/setpoint_raw/local topic.
 
-    As is, the `setpoint_msg` requires the following values:
+    As is, the `setpoint_msg` has the following fields:
 
+        self.setpoint_msg.position.x
+        self.setpoint_msg.position.y
+        self.setpoint_msg.position.z
         self.setpoint_msg.velocity.x
         self.setpoint_msg.velocity.y
         self.setpoint_msg.velocity.z
+        self.setpoint_msg.yaw
         self.setpoint_msg.yaw_rate
 
-    These are all in SI units (m/s, )
+    These are all in SI units (m, m/s, rad, rad/s). The command-sending 
+    has been abstracted away into 
+
+        self.set_velocity_command(vx, vy, vz, yr)
+        self.set_position_command(px, py, pz, yaw)
     """
     def __init__(self):
         super(ControllerNode, self).__init__()
@@ -37,6 +45,7 @@ class ControllerNode(object):
         service_timeout = 30
         try:
             rospy.wait_for_service('~/mavros/set_mode', service_timeout)
+            rospy.wait_for_service('~/mavros/cmd/arming', service_timeout)
             self._services_online = True
         except rospy.ROSException:
             self._services_online = False
@@ -50,9 +59,8 @@ class ControllerNode(object):
                                           self.cb_mavros_state)
         self.imu_data_sub = rospy.Subscriber('~/mavros/imu/data', Imu,
                                                self.cb_mavros_imu)
-        self.imu_data_sub = rospy.Subscriber('~/mavros/extended_state', ExtendedState,
+        self.ext_state_data_sub = rospy.Subscriber('~/mavros/extended_state', ExtendedState,
                                                self.cb_mavros_extended_state)
-
         self.pose_sub = rospy.Subscriber('~/mavros/local_position/pose', PoseStamped,
                                                self.cb_mavros_pose)
 
@@ -67,7 +75,9 @@ class ControllerNode(object):
         self.pose = PoseStamped()
         self.extended_state = ExtendedState()
 
-        # Send setpoints in seperate thread to better prevent failsafe
+        # Send setpoints in seperate thread to better prevent failsafe.
+        # If PX4 does not receive a constant stream of setpoints, it will
+        # activate a failsafe.
         self.setpoint_thread = Thread(target=self.send_setpoint, args=())
         self.setpoint_thread.daemon = True
         self.setpoint_thread.start()
@@ -131,8 +141,9 @@ class ControllerNode(object):
         for i in xrange(loop_freq * timeout):    
             # Checks:
             # - thread is ready
+            # - services online
             # - getting data from all subscribed topics
-            if self.thread_ready and all(self.ready_topics.values()):
+            if self.thread_ready and all(self.ready_topics.values()) and self._services_online:
                 preflight_passed = True 
                 rospy.loginfo("IFO_CORE: Preflight check passed.")
                 break
@@ -319,21 +330,18 @@ class ControllerNode(object):
             rate.sleep()
         return landed_state_confirmed
 
-        self.assertTrue(landed_state_confirmed, (
-            "landed state not detected | desired: {0}, current: {1} | index: {2}, timeout(seconds): {3}".
-            format(mavutil.mavlink.enums['MAV_LANDED_STATE'][
-                desired_landed_state].name, mavutil.mavlink.enums[
-                    'MAV_LANDED_STATE'][self.extended_state.landed_state].name,
-                   index, timeout)))
-
 
 if __name__ == "__main__":
     controller = ControllerNode()
     controller.takeoff()
-    controller.set_position_command(px = None, py = None, pz = 1)
-    sleep(10)
-    controller.set_position_command(px = 1, pz =1, yaw = 3.14159/2)
+    controller.set_position_command(px = 1, py = 1, pz = 1, yaw = 0)
     sleep(5)
-    controller.set_position_command(py = 1, pz =1, yaw = None)
+    controller.set_position_command(px = 1, py = -1, pz = 1, yaw = 3.14159/2)
+    sleep(5)
+    controller.set_position_command(px = -1, py = -1, pz = 1, yaw = 3.14159)
+    sleep(5)
+    controller.set_position_command(px = -1, py = 1, pz = 1, yaw = -3.14159/2)
     sleep(5)
     controller.land()
+    rospy.spin()
+
