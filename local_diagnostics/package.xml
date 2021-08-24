@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>controller</name>
+  <name>local_diagnostics</name>
   <version>0.0.0</version>
-  <description>The controller package</description>
+  <description>The local_diagnostics package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/velocity_controller</url> -->
+  <!-- <url type="website">http://wiki.ros.org/local_diagnostics</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
@@ -49,32 +49,14 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>mavlink</build_depend>
-  <build_depend>mavros</build_depend>
-  <build_depend>mavros_extras</build_depend>
-  <build_depend>mavros_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
+  <build_depend>diagnostics</build_depend>
   <build_depend>rospy</build_depend>
-  <build_export_depend>mavlink</build_export_depend>
-  <build_export_depend>mavros</build_export_depend>
-  <build_export_depend>mavros_extra</build_export_depend>
-  <build_export_depend>mavros_msgs</build_export_depend>
-  <build_export_depend>roscpp</build_export_depend>
+  <build_export_depend>diagnostics</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
-  <exec_depend>mavlink</exec_depend>
-  <exec_depend>mavros</exec_depend>
-  <exec_depend>mavros_extra</exec_depend>
-  <exec_depend>mavros_msgs</exec_depend>
-  <exec_depend>roscpp</exec_depend>
+  <exec_depend>diagnostic_aggregator</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>rospy</exec_depend>
-  <exec_depend>diagnostics_aggregator</exec_depend>
-  <exec_depend>diagnostics_msgs</exec_depend>
-  <exec_depend>python-time</exec_depend>
-  <exec_depend>python-threading</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>python-yaml</exec_depend>
-  <exec_depend>python-rospack</exec_depend>
+  <exec_depend>python-pandas</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

@@ -1,0 +1,31 @@
+<launch>
+    <arg name="vehicle_name_1" default="ifo001"/>
+    <arg name="vehicle_name_2" default="ifo002"/>
+    <arg name="vehicle_name_3" default="ifo003"/>
+
+    <include file="$(find ifo_gazebo)/launch/ifo_empty_world_3.launch">
+        <arg name="vehicle_name_1" default="ifo001"/>
+        <arg name="vehicle_name_2" default="ifo002"/>
+        <arg name="vehicle_name_3" default="ifo003"/>
+    </include> 
+
+    <group ns="$(arg vehicle_name_1)">
+        <node name="mocap_forwarder" output="screen" pkg="controller" type="mocap_forwarder_node.py"/>
+        <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
+        <node name="local_diagnostics" output="screen" pkg="local_diagnostics" type="local_diagnostics_node.py"/>
+    </group>
+
+    <group ns="$(arg vehicle_name_2)">
+        <node name="mocap_forwarder" output="screen" pkg="controller" type="mocap_forwarder_node.py"/>
+        <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
+        <node name="local_diagnostics" output="screen" pkg="local_diagnostics" type="local_diagnostics_node.py"/>
+    </group>
+
+    <group ns="$(arg vehicle_name_3)">
+        <node name="mocap_forwarder" output="screen" pkg="controller" type="mocap_forwarder_node.py"/>
+        <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
+        <node name="local_diagnostics" output="screen" pkg="local_diagnostics" type="local_diagnostics_node.py"/>
+    </group>
+
+
+</launch>

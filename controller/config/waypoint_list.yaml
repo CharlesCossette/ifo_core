@@ -1,0 +1,59 @@
+ifo001:
+  wp1:
+    time: 10
+    x: 0
+    y: 0
+    z: 1
+    yaw: 0
+  wp2:
+    time: 15
+    x: 0
+    y: 0
+    z: 1
+    yaw: 0
+  wp3:
+    time: 25
+    x: 0
+    y: 0
+    z: 1
+    yaw: 0
+
+ifo002:
+  wp1:
+    time: 10
+    x: 0
+    y: 2
+    z: 1
+    yaw: 0
+  wp2:
+    time: 15
+    x: 1.73
+    y: 1
+    z: 1
+    yaw: 4.19
+  wp3:
+    time: 25
+    x: 0
+    y: 2
+    z: 1
+    yaw: 0
+
+ifo003:
+  wp1:
+    time: 10
+    x: 0
+    y: -2
+    z: 1
+    yaw: 0
+  wp2:
+    time: 15
+    x: 1.73
+    y: -1
+    z: 1
+    yaw: 2.09
+  wp3:
+    time: 25
+    x: 0
+    y: -2
+    z: 1
+    yaw: 0

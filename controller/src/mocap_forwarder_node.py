@@ -1,29 +1,40 @@
+#!/usr/bin/env python2
 import rospy 
 from mavros_msgs.srv import ParamGet, ParamSet
 from mavros_msgs.msg import ParamValue
 from geometry_msgs.msg import PoseStamped
+from time import sleep 
+from ifo_common.ifo_node import IfoNode
 
-class MocapForwarder(object):
+class MocapForwarderNode(IfoNode):
     def __init__(self):
-        super(MocapForwarder, self).__init__()
+        rospy.init_node('mocap_forwarder')
+        super(MocapForwarderNode, self).__init__()
+
+        self.report_diagnostics(level=1, message='Initializing...')
 
         # Wait for services to become available
         service_timeout = 30
         try:
-            rospy.wait_for_service('~/mavros/param/set', service_timeout)
-            rospy.wait_for_service('~/mavros/param/get', service_timeout)
+            rospy.wait_for_service('mavros/param/set', service_timeout)
+            rospy.wait_for_service('mavros/param/get', service_timeout)
             self._services_online = True
         except rospy.ROSException:
             self._services_online = False
         
-        rospy.init_node('mocap_forwarder')
-        self.set_param_srv = rospy.ServiceProxy('~/mavros/param/set', ParamSet)
-        self.get_param_srv = rospy.ServiceProxy('~/mavros/param/get', ParamGet)
-        self.pose_sub = rospy.Subscriber('/vrpn_client_node/ifo/pose', PoseStamped,
+        
+        who_am_i = rospy.get_namespace()
+        if who_am_i == '/':
+            rospy.loginfo(rospy.get_name() + ' not launched in a namespace. Assuming ifo001.')
+            who_am_i = '/ifo001/'
+
+        self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
+        self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
+        self.pose_sub = rospy.Subscriber('/vrpn_client_node' + who_am_i + 'pose', PoseStamped,
                                          self.cb_mocap_pose)
-        self.pose_pub = rospy.Publisher('~/mavros/vision_pose/pose',PoseStamped)
-
-
+        self.pose_pub = rospy.Publisher('mavros/vision_pose/pose',PoseStamped, queue_size=1)
+        sleep(20)
+        self.report_diagnostics(level=1, message='Ready.')
 
     def cb_mocap_pose(self, pose_msg):
         self.pose = pose_msg
@@ -68,6 +79,7 @@ class MocapForwarder(object):
 
     def start(self):
         # Set the right PX4 parameters for when using mocap
+
         self.set_parameter('EKF2_HGT_MODE', 3)
         self.set_parameter('EKF2_AID_MASK', 0b000011000)
         self.set_parameter('EKF2_EV_DELAY', 0.0)
@@ -77,11 +89,11 @@ class MocapForwarder(object):
         self.set_parameter('MAV_ODOM_LP', 1)   
         loop_freq = 40
         rate = rospy.Rate(40)
+        self.report_diagnostics(level=0, message='Normal.')
         while True:
             self.pose_pub.publish(self.pose)
             rate.sleep()
 
 if __name__ == "__main__":
-    node = MocapForwarder()
-    sleep(5)
+    node = MocapForwarderNode()
     node.start()

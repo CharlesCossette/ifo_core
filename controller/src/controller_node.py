@@ -8,66 +8,61 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
 from threading import Thread
 from time import sleep
+from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
+import yaml
+import rospkg
+from ifo_common.ifo_node import IfoNode
 
-class ControllerNode(object):
+class ControllerNode(IfoNode):
     """
     This class starts a thread which continuously publishes its own 
     `setpoint_msg` property on the /mavros/setpoint_raw/local topic.
 
-    As is, the `setpoint_msg` has the following fields:
-
-        self.setpoint_msg.position.x
-        self.setpoint_msg.position.y
-        self.setpoint_msg.position.z
-        self.setpoint_msg.velocity.x
-        self.setpoint_msg.velocity.y
-        self.setpoint_msg.velocity.z
-        self.setpoint_msg.yaw
-        self.setpoint_msg.yaw_rate
-
-    These are all in SI units (m, m/s, rad, rad/s). The command-sending 
-    has been abstracted away into 
+    The command-sending has been abstracted away into 
 
         self.set_velocity_command(vx, vy, vz, yr)
         self.set_position_command(px, py, pz, yaw)
     """
     def __init__(self):
+        rospy.init_node('controller')
         super(ControllerNode, self).__init__()
 
-        rospy.init_node('controller')
         
         self.thread_ready = False
         self.kill_thread = False
         self.ready_topics = {key: False for key in ['state', 'imu',
                              'pose', 'extended_state']}
+        self.report_diagnostics(level=1, message='Initializing.')
 
         # Wait for services to become available
-        service_timeout = 30
+        service_timeout = 20
         try:
-            rospy.wait_for_service('~/mavros/set_mode', service_timeout)
-            rospy.wait_for_service('~/mavros/cmd/arming', service_timeout)
+            rospy.wait_for_service('mavros/set_mode', service_timeout)
+            rospy.wait_for_service('mavros/cmd/arming', service_timeout)
             self._services_online = True
         except rospy.ROSException:
+            rospy.logwarn('IFO CORE: Controller required services not online.')
             self._services_online = False
 
         # Create service proxies
-        self.set_mode_srv = rospy.ServiceProxy('~/mavros/set_mode', SetMode)
-        self.set_arming_srv = rospy.ServiceProxy('~/mavros/cmd/arming', CommandBool)
+        self.set_mode_srv = rospy.ServiceProxy('mavros/set_mode', SetMode)
+        self.set_arming_srv = rospy.ServiceProxy('mavros/cmd/arming', CommandBool)
 
         # Subscribers
-        self.state_sub = rospy.Subscriber('~/mavros/state', State,
+        self.state_sub = rospy.Subscriber('mavros/state', State,
                                           self.cb_mavros_state)
-        self.imu_data_sub = rospy.Subscriber('~/mavros/imu/data', Imu,
+        self.imu_data_sub = rospy.Subscriber('mavros/imu/data', Imu,
                                                self.cb_mavros_imu)
-        self.ext_state_data_sub = rospy.Subscriber('~/mavros/extended_state', ExtendedState,
+        self.ext_state_data_sub = rospy.Subscriber('mavros/extended_state', ExtendedState,
                                                self.cb_mavros_extended_state)
-        self.pose_sub = rospy.Subscriber('~/mavros/local_position/pose', PoseStamped,
+        self.pose_sub = rospy.Subscriber('mavros/local_position/pose', PoseStamped,
                                                self.cb_mavros_pose)
 
-        # Publisher
+        # Publishers
         self.setpoint_pub = rospy.Publisher(
-            'mavros/setpoint_raw/local', PositionTarget, queue_size=1)
-
+            'mavros/setpoint_raw/local', PositionTarget, queue_size=1
+        )
+        
         self.setpoint_msg = PositionTarget()
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
         self.set_position_command(0,0,0,0)
@@ -82,6 +77,7 @@ class ControllerNode(object):
         self.setpoint_thread.daemon = True
         self.setpoint_thread.start()
 
+        self.report_diagnostics(level=0, message='Ready.')
     def cb_mavros_pose(self, pose_msg):
         self.pose = pose_msg
         self.ready_topics['pose'] = True 
@@ -181,13 +177,32 @@ class ControllerNode(object):
             self.set_velocity_command(vz = u)
 
             if abs(target_altitude - altitude) < threshold:
-                altitude_reached = True 
+                takeoff_successful = True 
                 rospy.loginfo('IFO_CORE: Takeoff successful, altitude reached.')
-                self.set_velocity_command(vz = 0)                
-                break   
+                self.set_velocity_command(vz = 0)             
+                break
 
             rate.sleep()
-   
+        return takeoff_successful 
+        
+    def hold_altitude(self, target_altitude = None, duration = 1):
+        loop_freq = 50 # Hz
+        rate = rospy.Rate(loop_freq)
+        altitude = self.pose.pose.position.z
+        if target_altitude is None:
+            target_altitude = altitude
+            
+        start_time = rospy.get_time()
+        while (rospy.get_time() - start_time) < duration:
+            # Get altitude from state estimator
+            altitude = self.pose.pose.position.z
+
+            # Simple proportional control
+            k_p = 1.5 # Gain
+            u = k_p*(target_altitude - altitude)
+            self.set_velocity_command(vz = u)
+            rate.sleep()
+
     def land(self):
         """ 
         Lands the quadcopter where it is.
@@ -330,18 +345,62 @@ class ControllerNode(object):
             rate.sleep()
         return landed_state_confirmed
 
+    def load_waypoint_list(self, filename = None):
+        """ 
+        Reads the yaml file located at /controller/config/waypoint_list.yaml
+        to read anchor information.
+        """
+        rp = rospkg.RosPack()
+        if filename is None:            
+            path = rp.get_path('controller')
+            filename = path + '/config/waypoint_list.yaml'
+
+        with open(filename) as file:
+            waypoint_list = yaml.load(file, Loader=yaml.FullLoader)
+
+        who_am_i = rospy.get_namespace()
+        if who_am_i == '/':
+            rospy.loginfo('Controller node not launched in a namespace. Assuming ifo001.')
+            who_am_i = 'ifo001'
+        else:
+            who_am_i = who_am_i.strip('/')
+
+        if who_am_i in waypoint_list:
+            temp = waypoint_list[who_am_i]
+            my_waypoint_list = []
+            for key, value in temp.iteritems():
+                wp = {key: value[key] for key in ['x','y','z','yaw']}
+                my_waypoint_list.append((value['time'], wp))
+
+            # Sort by time.
+            my_waypoint_list = sorted(my_waypoint_list, key=lambda x: x[0])
+            self.waypoint_list = my_waypoint_list
+            print(self.waypoint_list)
+        else:
+            rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
+
 
 if __name__ == "__main__":
     controller = ControllerNode()
+    controller.load_waypoint_list()
+    controller.wait_for_nodes('mocap_forwarder')
+    controller.report_diagnostics(level=0, message='Normal.')
     controller.takeoff()
-    controller.set_position_command(px = 1, py = 1, pz = 1, yaw = 0)
-    sleep(5)
-    controller.set_position_command(px = 1, py = -1, pz = 1, yaw = 3.14159/2)
-    sleep(5)
-    controller.set_position_command(px = -1, py = -1, pz = 1, yaw = 3.14159)
-    sleep(5)
-    controller.set_position_command(px = -1, py = 1, pz = 1, yaw = -3.14159/2)
+    start_time = rospy.get_time()
+
+    first_waypoint = True
+    for waypoint in controller.waypoint_list:
+        t_waypoint = waypoint[0]
+        wp = waypoint[1]
+        while rospy.get_time() - start_time < t_waypoint:
+            if first_waypoint:
+                controller.hold_altitude(target_altitude=1,duration=0.01)
+            else:
+                sleep(0.01)
+        print(wp)
+        controller.set_position_command(px=wp['x'], py=wp['y'], pz=wp['z'], yaw=wp['yaw'])
+        first_waypoint = False
+
     sleep(5)
     controller.land()
-    rospy.spin()
 
