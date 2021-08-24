@@ -17,7 +17,7 @@ to. This node then publishes a summary of overall system health.
 This node can be used as a mechanism to get nodes to "wait" for other nodes to 
 be initialized before starting a procedure.
 """
-def print_summary(summary):
+def print_dictionary(summary):
     """
     Essentially just prints a once-nested dictionary with identicle keys as a 
     table.
@@ -97,7 +97,7 @@ class LocalDiagnosticsNode(object):
                 'values':diag_status.values,
                 'age':rospy.get_time() - diag_msg.header.stamp.to_sec()
              }
-        print_summary(self.node_summary)
+        print_dictionary(self.node_summary)
 
     def get_node_level(self, request):
         """
@@ -115,6 +115,21 @@ class LocalDiagnosticsNode(object):
         response.is_valid = is_valid
         return response
 
+    def print_summary(self):
+
+        # Begin by refreshing the ages
+        for node_name in self.node_summary:
+            temp = self.node_summary[node_name]
+            temp['age'] = rospy.get_time() - temp['last_updated']
+            self.node_summary[node_name] = temp
+        print_dictionary(self.node_summary)
+
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
+    rate = rospy.Rate(0.1)
+    while True:
+        local_diagnostics.print_summary()
+        rate.sleep()
+
+    # Should never get here.
     rospy.spin()

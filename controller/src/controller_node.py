@@ -9,6 +9,8 @@ from std_msgs.msg import Header
 from threading import Thread
 from time import sleep
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
+from controller.srv import ReachWaypointList
+from controller.msg import Waypoint
 import yaml
 import rospkg
 from ifo_common.ifo_node import IfoNode
@@ -63,6 +65,11 @@ class ControllerNode(IfoNode):
             'mavros/setpoint_raw/local', PositionTarget, queue_size=1
         )
         
+        # Services
+        self.reach_waypoint_list_srv = rospy.Service(
+            'controller/reach_waypoint_list', ReachWaypointList, self.reach_waypoint_list
+        )
+
         self.setpoint_msg = PositionTarget()
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
         self.set_position_command(0,0,0,0)
@@ -348,7 +355,6 @@ class ControllerNode(IfoNode):
     def load_waypoint_list(self, filename = None):
         """ 
         Reads the yaml file located at /controller/config/waypoint_list.yaml
-        to read anchor information.
         """
         rp = rospkg.RosPack()
         if filename is None:            
@@ -379,28 +385,32 @@ class ControllerNode(IfoNode):
         else:
             rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
 
+    def reach_waypoint_list(self, waypoint_list):
+
+        self.wait_for_nodes('mocap_forwarder')
+        self.report_diagnostics(level=0, message='Normal.')
+        self.takeoff()
+        start_time = rospy.get_time()
+        first_waypoint = True
+        for waypoint in waypoint_list:
+            t_waypoint = waypoint[0]
+            wp = waypoint[1]
+            while rospy.get_time() - start_time < t_waypoint:
+                if first_waypoint:
+                    self.hold_altitude(target_altitude=1,duration=0.01)
+                else:
+                    rospy.sleep(0.01)
+            print(wp)
+            self.set_position_command(px=wp['x'], py=wp['y'], pz=wp['z'], yaw=wp['yaw'])
+            first_waypoint = False
+
+        rospy.sleep(5)
+        self.land()
+    
+    def reach_waypoint(self, waypoint):
+        pass
 
 if __name__ == "__main__":
     controller = ControllerNode()
-    controller.load_waypoint_list()
-    controller.wait_for_nodes('mocap_forwarder')
-    controller.report_diagnostics(level=0, message='Normal.')
-    controller.takeoff()
-    start_time = rospy.get_time()
-
-    first_waypoint = True
-    for waypoint in controller.waypoint_list:
-        t_waypoint = waypoint[0]
-        wp = waypoint[1]
-        while rospy.get_time() - start_time < t_waypoint:
-            if first_waypoint:
-                controller.hold_altitude(target_altitude=1,duration=0.01)
-            else:
-                sleep(0.01)
-        print(wp)
-        controller.set_position_command(px=wp['x'], py=wp['y'], pz=wp['z'], yaw=wp['yaw'])
-        first_waypoint = False
-
-    sleep(5)
-    controller.land()
+    rospy.spin()
 

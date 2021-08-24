@@ -33,7 +33,7 @@ class MocapForwarderNode(IfoNode):
         self.pose_sub = rospy.Subscriber('/vrpn_client_node' + who_am_i + 'pose', PoseStamped,
                                          self.cb_mocap_pose)
         self.pose_pub = rospy.Publisher('mavros/vision_pose/pose',PoseStamped, queue_size=1)
-        sleep(20)
+        rospy.sleep(10)
         self.report_diagnostics(level=1, message='Ready.')
 
     def cb_mocap_pose(self, pose_msg):

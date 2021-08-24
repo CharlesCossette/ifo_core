@@ -1,0 +1,5 @@
+<launch>
+    <node name="mocap_forwarder" output="screen" pkg="controller" type="mocap_forwarder_node.py"/>
+    <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
+    <node name="local_diagnostics" output="screen" pkg="local_diagnostics" type="local_diagnostics_node.py"/>
+</launch>
