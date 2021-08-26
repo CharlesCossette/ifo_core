@@ -101,7 +101,7 @@ class LocalDiagnosticsNode(object):
 
     def get_node_level(self, request):
         """
-        Service that returns that diagnostic status level of a particular node.
+        Service that returns the diagnostic status level of a particular node.
         """
         if request.node_name in self.node_summary:
             node_status = self.node_summary[request.node_name]

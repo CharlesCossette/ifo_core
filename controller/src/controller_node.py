@@ -5,11 +5,11 @@ from mavros_msgs.srv import SetMode, CommandBool
 from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State, PositionTarget, AttitudeTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Bool
 from threading import Thread
 from time import sleep
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
-from controller.srv import ReachWaypointList
+from controller.srv import ReachWaypointList, ReachWaypointListResponse
 from controller.msg import Waypoint
 import yaml
 import rospkg
@@ -67,7 +67,7 @@ class ControllerNode(IfoNode):
         
         # Services
         self.reach_waypoint_list_srv = rospy.Service(
-            'controller/reach_waypoint_list', ReachWaypointList, self.reach_waypoint_list
+            'controller/reach_waypoint_list', ReachWaypointList, self.cb_reach_waypoint_list
         )
 
         self.setpoint_msg = PositionTarget()
@@ -392,21 +392,26 @@ class ControllerNode(IfoNode):
         self.takeoff()
         start_time = rospy.get_time()
         first_waypoint = True
-        for waypoint in waypoint_list:
-            t_waypoint = waypoint[0]
-            wp = waypoint[1]
+        for wp in waypoint_list:
+            t_waypoint = wp.time
             while rospy.get_time() - start_time < t_waypoint:
                 if first_waypoint:
                     self.hold_altitude(target_altitude=1,duration=0.01)
                 else:
                     rospy.sleep(0.01)
             print(wp)
-            self.set_position_command(px=wp['x'], py=wp['y'], pz=wp['z'], yaw=wp['yaw'])
+            self.set_position_command(px=wp.x, py=wp.y, pz=wp.z, yaw=wp.yaw)
             first_waypoint = False
 
         rospy.sleep(5)
         self.land()
     
+    def cb_reach_waypoint_list(self, request):
+        self.reach_waypoint_list(request.waypoint_list)
+        response = ReachWaypointListResponse()
+        response.success = True
+        return response
+
     def reach_waypoint(self, waypoint):
         pass
 

@@ -69,8 +69,9 @@ class IfoNode(object):
                 response = self.get_node_level(ns + node_name)
                 if response.level != 0 and response.is_valid:
                     nodes_ready = False
+            rate.sleep()
         
         rospy.loginfo('Node(s) ' + str(node_names) + ' are ready.')
-
+        
 
     
