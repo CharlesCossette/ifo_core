@@ -10,10 +10,10 @@ from threading import Thread
 from time import sleep
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
 from controller.srv import ReachWaypointList, ReachWaypointListResponse
-from controller.msg import Waypoint
-import yaml
+from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
+
 
 class ControllerNode(IfoNode):
     """
@@ -27,7 +27,7 @@ class ControllerNode(IfoNode):
     """
     def __init__(self):
         rospy.init_node('controller')
-        super(ControllerNode, self).__init__()
+        super(ControllerNode, self).__init__(diagnostics_thread = True)
 
         
         self.thread_ready = False
@@ -59,15 +59,14 @@ class ControllerNode(IfoNode):
                                                self.cb_mavros_extended_state)
         self.pose_sub = rospy.Subscriber('mavros/local_position/pose', PoseStamped,
                                                self.cb_mavros_pose)
+        self.waypoints_sub = rospy.Subscriber('controller/waypoints_in', WaypointList,
+                                               self.cb_waypoints_in)
+        self.velocity_cmd_sub = rospy.Subscriber('controller/velocity_cmd_in', PositionTarget,
+                                               self.cb_velocity_cmd_in)
 
         # Publishers
         self.setpoint_pub = rospy.Publisher(
             'mavros/setpoint_raw/local', PositionTarget, queue_size=1
-        )
-        
-        # Services
-        self.reach_waypoint_list_srv = rospy.Service(
-            'controller/reach_waypoint_list', ReachWaypointList, self.cb_reach_waypoint_list
         )
 
         self.setpoint_msg = PositionTarget()
@@ -85,6 +84,7 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.start()
 
         self.report_diagnostics(level=0, message='Ready.')
+
     def cb_mavros_pose(self, pose_msg):
         self.pose = pose_msg
         self.ready_topics['pose'] = True 
@@ -386,15 +386,14 @@ class ControllerNode(IfoNode):
             rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
 
     def reach_waypoint_list(self, waypoint_list):
-
+        # TODO: Sort list before reaching waypoints.
         self.wait_for_nodes('mocap_forwarder')
-        self.report_diagnostics(level=0, message='Normal.')
+        self.report_diagnostics(level=0, message='Normal. Reaching waypoints.')
         self.takeoff()
-        start_time = rospy.get_time()
         first_waypoint = True
         for wp in waypoint_list:
             t_waypoint = wp.time
-            while rospy.get_time() - start_time < t_waypoint:
+            while rospy.get_time() < t_waypoint:
                 if first_waypoint:
                     self.hold_altitude(target_altitude=1,duration=0.01)
                 else:
@@ -406,11 +405,11 @@ class ControllerNode(IfoNode):
         rospy.sleep(5)
         self.land()
     
-    def cb_reach_waypoint_list(self, request):
-        self.reach_waypoint_list(request.waypoint_list)
-        response = ReachWaypointListResponse()
-        response.success = True
-        return response
+    def cb_waypoints_in(self, waypoints_msg):
+        self.reach_waypoint_list(waypoints_msg.data)
+
+    def cb_velocity_cmd_in(self, velocity_cmd_msg):
+        pass
 
     def reach_waypoint(self, waypoint):
         pass

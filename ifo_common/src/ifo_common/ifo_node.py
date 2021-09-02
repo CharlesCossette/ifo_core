@@ -1,9 +1,9 @@
 import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from local_diagnostics.srv import GetNodeLevel, GetNodeLevelRequest
-
+from threading import Thread
 class IfoNode(object):
-    def __init__(self):
+    def __init__(self, diagnostics_thread = False):
         super(IfoNode, self).__init__()
 
         try:
@@ -24,6 +24,20 @@ class IfoNode(object):
         
         self.get_node_level_srv = rospy.ServiceProxy('local_diagnostics/get_node_level', GetNodeLevel)
 
+        if diagnostics_thread:
+            self.last_diag_msg = None
+            self._report_thread = Thread(target=self._reporting_thread, args=())
+            self._report_thread.daemon = True
+            self._report_thread.start()
+
+    def _reporting_thread(self):
+        rate = rospy.Rate(1)
+        while not rospy.is_shutdown():
+            if self.last_diag_msg is not None:
+                self.last_diag_msg.header.stamp = rospy.Time.now()
+                self._diagnostics_pub.publish(self.last_diag_msg)
+            rate.sleep()
+
     def report_diagnostics(self, name = None, level = 0, message = '', 
                            hardware_id ='', values = []):
         if name is None:
@@ -37,7 +51,7 @@ class IfoNode(object):
         diag_msg.status[0].message = message
         diag_msg.status[0].hardware_id = hardware_id
         diag_msg.status[0].values = values
-
+        self.last_diag_msg = diag_msg
         self._diagnostics_pub.publish(diag_msg)
 
    

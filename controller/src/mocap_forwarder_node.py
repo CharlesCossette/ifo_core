@@ -9,7 +9,7 @@ from ifo_common.ifo_node import IfoNode
 class MocapForwarderNode(IfoNode):
     def __init__(self):
         rospy.init_node('mocap_forwarder')
-        super(MocapForwarderNode, self).__init__()
+        super(MocapForwarderNode, self).__init__(diagnostics_thread = True)
 
         self.report_diagnostics(level=1, message='Initializing...')
 
@@ -89,7 +89,7 @@ class MocapForwarderNode(IfoNode):
         self.set_parameter('MAV_ODOM_LP', 1)   
         loop_freq = 40
         rate = rospy.Rate(40)
-        self.report_diagnostics(level=0, message='Normal.')
+        self.report_diagnostics(level=0, message='Normal. Forwarding mocap data.')
         while True:
             self.pose_pub.publish(self.pose)
             rate.sleep()

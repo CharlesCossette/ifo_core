@@ -95,9 +95,9 @@ class LocalDiagnosticsNode(object):
                 'message':diag_status.message,
                 'id':diag_status.hardware_id,
                 'values':diag_status.values,
-                'age':rospy.get_time() - diag_msg.header.stamp.to_sec()
+                'age': round(rospy.get_time() - diag_msg.header.stamp.to_sec(),1)
              }
-        print_dictionary(self.node_summary)
+        #print_dictionary(self.node_summary)
 
     def get_node_level(self, request):
         """
@@ -115,18 +115,20 @@ class LocalDiagnosticsNode(object):
         response.is_valid = is_valid
         return response
 
-    def print_summary(self):
-
-        # Begin by refreshing the ages
+    def refresh_ages(self):
         for node_name in self.node_summary:
             temp = self.node_summary[node_name]
             temp['age'] = rospy.get_time() - temp['last_updated']
             self.node_summary[node_name] = temp
+
+    def print_summary(self):
+        # Begin by refreshing the ages
+        self.refresh_ages()
         print_dictionary(self.node_summary)
 
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
-    rate = rospy.Rate(0.1)
+    rate = rospy.Rate(0.5)
     while True:
         local_diagnostics.print_summary()
         rate.sleep()
