@@ -3,7 +3,6 @@ import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from std_msgs.msg import Bool
 from local_diagnostics.srv import GetNodeLevel, GetNodeLevelResponse
-import pandas as pd
 
 """
 The purpose of this node is to provide aggregate diagnostic information from 
@@ -71,6 +70,11 @@ class LocalDiagnosticsNode(object):
             'local_diagnostics/killswitch', Bool, queue_size=1
         )
 
+        # TODO: Publish periodic summary. need to define a message.
+        # self.summary_pub = rospy.Publisher(
+        #     'local_diagnostics/summary', TODO, queue_size=1
+        # )
+
         # Services
         self.node_level_srv = rospy.Service(
             'local_diagnostics/get_node_level', GetNodeLevel, self.get_node_level
@@ -78,7 +82,11 @@ class LocalDiagnosticsNode(object):
 
         self.node_summary  = {}
 
-    def cb_diagnostics(self, diag_msg):        
+    def cb_diagnostics(self, diag_msg):      
+        """
+        Upon recieving a diagnostics message from any node, update the entry
+        in the current self.node_summary dictionary.        
+        """  
         for diag_status in diag_msg.status:
             
             # KILL MISSION. Send message to all nodes.
@@ -116,22 +124,32 @@ class LocalDiagnosticsNode(object):
         return response
 
     def refresh_ages(self):
+        """
+        Loops through all the node statuses and updates the age of last update.
+        """
         for node_name in self.node_summary:
             temp = self.node_summary[node_name]
-            temp['age'] = rospy.get_time() - temp['last_updated']
+            age = rospy.get_time() - temp['last_updated']
+            temp['age'] = age
             self.node_summary[node_name] = temp
 
     def print_summary(self):
-        # Begin by refreshing the ages
+        """
+        Prints the node summary to screen in a table.
+        """
         self.refresh_ages()
         print_dictionary(self.node_summary)
+    
+    def start(self):
+        rate = rospy.Rate(0.5)
+        while True:
+            self.print_summary()
+            #self.summary_pub.publish(self.node_summary) # TODO
+            rate.sleep()
 
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
-    rate = rospy.Rate(0.5)
-    while True:
-        local_diagnostics.print_summary()
-        rate.sleep()
+    local_diagnostics.start()
 
     # Should never get here.
     rospy.spin()

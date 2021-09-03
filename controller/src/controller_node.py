@@ -83,7 +83,7 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.daemon = True
         self.setpoint_thread.start()
 
-        self.report_diagnostics(level=0, message='Ready.')
+        self.report_diagnostics(level=0, message='Ready. Idle.')
 
     def cb_mavros_pose(self, pose_msg):
         self.pose = pose_msg
@@ -216,17 +216,20 @@ class ControllerNode(IfoNode):
         """
         self.set_velocity_command(vz = -0.6) # Send downwards velocity command.
         self.set_mode('AUTO.LAND',5) # Simulanteously activate automatic landing.
+        self.report_diagnostics(level=0, message='Normal. Landing.')
         is_landed = self.wait_for_landed_state(10) # This is failing often.
         if is_landed:
             self.set_arm(False, 5) # Landed state required for disarming.
         else:
             rospy.logwarn('Automatic landing failed. Sending downwards velocity command.')
+            self.report_diagnostics(level=1, message='Landing issue.')
             self.set_velocity_command(vz = -1.5)
             is_landed = self.wait_for_landed_state(3)
             if is_landed:
                 self.set_arm(False, 5)
             else: 
                 rospy.logwarn('Landing state still not detected. Killing.')
+                self.report_diagnostics(level=2, message='Landing failed. Killing')
                 self.kill_thread = True
     
     def set_mode(self, mode, timeout):
@@ -404,8 +407,10 @@ class ControllerNode(IfoNode):
 
         rospy.sleep(5)
         self.land()
+        self.report_diagnostics(level=0, message='Normal. Idle.')
     
     def cb_waypoints_in(self, waypoints_msg):
+        print(waypoints_msg)
         self.reach_waypoint_list(waypoints_msg.data)
 
     def cb_velocity_cmd_in(self, velocity_cmd_msg):
