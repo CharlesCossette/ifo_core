@@ -1,0 +1,1 @@
+local_diagnostics/NodeStatus[] data

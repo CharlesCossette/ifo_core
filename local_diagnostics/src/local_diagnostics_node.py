@@ -3,6 +3,7 @@ import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from std_msgs.msg import Bool
 from local_diagnostics.srv import GetNodeLevel, GetNodeLevelResponse
+from local_diagnostics.msg import NodeStatus, NodeSummary
 
 """
 The purpose of this node is to provide aggregate diagnostic information from 
@@ -70,10 +71,9 @@ class LocalDiagnosticsNode(object):
             'local_diagnostics/killswitch', Bool, queue_size=1
         )
 
-        # TODO: Publish periodic summary. need to define a message.
-        # self.summary_pub = rospy.Publisher(
-        #     'local_diagnostics/summary', TODO, queue_size=1
-        # )
+        self.summary_pub = rospy.Publisher(
+            'local_diagnostics/summary', NodeSummary, queue_size=1
+        )
 
         # Services
         self.node_level_srv = rospy.Service(
@@ -142,10 +142,15 @@ class LocalDiagnosticsNode(object):
     
     def start(self):
         rate = rospy.Rate(0.5)
-        while True:
-            self.print_summary()
-            #self.summary_pub.publish(self.node_summary) # TODO
-            rate.sleep()
+        while not rospy.is_shutdown():
+            if len(self.node_summary) > 0:
+                self.print_summary()
+                summary_list = []
+                for _, values in self.node_summary.items():
+                    summary_list.append(NodeStatus(**values))
+                summary_msg = NodeSummary(summary_list)
+                self.summary_pub.publish(summary_msg) 
+                rate.sleep()
 
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
