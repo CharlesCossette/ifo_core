@@ -9,7 +9,6 @@ from std_msgs.msg import Header, Bool
 from threading import Thread
 from time import sleep
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
-from controller.srv import ReachWaypointList, ReachWaypointListResponse
 from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
