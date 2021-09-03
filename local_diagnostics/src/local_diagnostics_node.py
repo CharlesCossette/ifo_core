@@ -52,6 +52,7 @@ def print_dictionary(summary):
             line_string = '{:<{width}}'.format(key, width=column_widths['first'] )
             nested_dict = summary[key]
             for key2 in nested_dict.keys():
+                # TODO: stop printing like 10 digits if its a float
                 line_string += '{:^{width}}'.format(nested_dict[key2], width=column_widths[key2])
             print(line_string)
         print(seperator)
@@ -141,14 +142,21 @@ class LocalDiagnosticsNode(object):
         print_dictionary(self.node_summary)
     
     def start(self):
+        """
+        Periodically publishes the node summary.
+        """
         rate = rospy.Rate(0.5)
         while not rospy.is_shutdown():
             if len(self.node_summary) > 0:
                 self.print_summary()
+
+                # Convert to proper NodeSummary message
                 summary_list = []
                 for _, values in self.node_summary.items():
                     summary_list.append(NodeStatus(**values))
                 summary_msg = NodeSummary(summary_list)
+
+                # Publish
                 self.summary_pub.publish(summary_msg) 
                 rate.sleep()
 
