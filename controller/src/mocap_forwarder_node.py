@@ -54,6 +54,7 @@ class MocapForwarderNode(IfoNode):
             param_value.real = value
 
         for i in xrange(timeout * loop_freq):
+            # TODO. We appear to be getting stuck here when the service fails.
             resp = self.set_param_srv(param_id, param_value)
             value_check, _ = self.get_parameter(param_id) 
             if isinstance(value, int):
@@ -91,8 +92,9 @@ class MocapForwarderNode(IfoNode):
         self.set_parameter('MAV_ODOM_LP', 1)   
         loop_freq = 40
         rate = rospy.Rate(40)
+        # TODO. Need a check here to see if we are getting mocap.
         self.report_diagnostics(level=0, message='Normal. Forwarding mocap data.')
-        while True:
+        while not rospy.is_shutdown():
             self.pose_pub.publish(self.pose)
             rate.sleep()
 
