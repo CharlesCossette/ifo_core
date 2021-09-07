@@ -30,7 +30,9 @@ class MocapForwarderNode(IfoNode):
 
         self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
         self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
-        self.pose_sub = rospy.Subscriber('/vrpn_client_node' + who_am_i + 'pose', PoseStamped,
+        # TODO. Warning: vrpn_client_node needs to be run locally on each agent. Should we do this?
+        # or have a global node.
+        self.pose_sub = rospy.Subscriber('vrpn_client_node' + who_am_i + 'pose', PoseStamped,
                                          self.cb_mocap_pose)
         self.pose_pub = rospy.Publisher('mavros/vision_pose/pose',PoseStamped, queue_size=1)
         rospy.sleep(10)
