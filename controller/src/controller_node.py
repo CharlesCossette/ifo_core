@@ -7,11 +7,18 @@ from mavros_msgs.msg import State, PositionTarget, AttitudeTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header, Bool
 from threading import Thread
-from time import sleep
 from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
 from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
+
+"""
+The controller node provides the main interface to mavros. It provides basic 
+procedures for takeoff, landing, altitude holding, and reaching waypoints.
+
+Currently, it is mainly build under the assumption that mocap data is being 
+streamed to the drone regularly.
+"""
 
 
 class ControllerNode(IfoNode):
@@ -102,10 +109,11 @@ class ControllerNode(IfoNode):
     def send_setpoint(self):
         """
         This function runs in a seperate thread, sending setpoint commands to 
-        the FCU at 10Hz.
+        the FCU at 10Hz. This is required by PX4.
 
         This is performed by reading the class internal variable `setpoint_msg`,
-        and continuously sending its value to the FCU.
+        and continuously sending its value to the FCU. Killing this thread
+        activates a failsafe on the FCU.
 
         This function is called once.
         """
@@ -114,7 +122,7 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.header.frame_id = "base_footprint"
         self.thread_ready = True # Thread is ready.
         while not rospy.is_shutdown():
-            if not self.kill_thread:
+            if not self.killswitch:
                 self.setpoint_msg.header.stamp = rospy.Time.now()
                 self.setpoint_pub.publish(self.setpoint_msg)
                 try:  # prevent garbage in console output when thread is killed
@@ -136,6 +144,8 @@ class ControllerNode(IfoNode):
         #   - Just take off and hover? (can default to this)
         #   - Source seeking? Some other node can actually decide the command.
         # This is quite the implementation. We should have a seperate diagnostics node.
+        # TODO. This needs to be redesigned... can probably add some convenient 
+        # methods in the abstract IfoNode class.
 
         loop_freq = 5
         rate = rospy.Rate(loop_freq)
@@ -192,6 +202,16 @@ class ControllerNode(IfoNode):
         return takeoff_successful 
         
     def hold_altitude(self, target_altitude = None, duration = 1):
+        """
+        Holds the quadcopter at a specified target_altitude for a specified
+        duration, then the function exits.
+
+        If target_altitude is left blank, current altitude is used as the target.
+
+        USES STATE ESTIMATE FEEDBACK. WARNING: X,Y,YAW will drift as these are 
+        left uncontrolled/open loop.
+        """
+        
         loop_freq = 50 # Hz
         rate = rospy.Rate(loop_freq)
         altitude = self.pose.pose.position.z
@@ -208,6 +228,8 @@ class ControllerNode(IfoNode):
             u = k_p*(target_altitude - altitude)
             self.set_velocity_command(vz = u)
             rate.sleep()
+
+        self.set_velocity_command(0,0,0,0)
 
     def land(self):
         """ 
@@ -229,7 +251,7 @@ class ControllerNode(IfoNode):
             else: 
                 rospy.logwarn('Landing state still not detected. Killing.')
                 self.report_diagnostics(level=2, message='Landing failed. Killing')
-                self.kill_thread = True
+                self.killswitch = True
     
     def set_mode(self, mode, timeout):
         """ 
@@ -356,6 +378,7 @@ class ControllerNode(IfoNode):
 
     def load_waypoint_list(self, filename = None):
         """ 
+        DEPRECATED. 
         Reads the yaml file located at /controller/config/waypoint_list.yaml
         """
         rp = rospkg.RosPack()
@@ -389,6 +412,10 @@ class ControllerNode(IfoNode):
 
     def reach_waypoint_list(self, waypoint_list):
         # TODO: Sort list before reaching waypoints.
+        # TODO: bug in the logic somewhere
+        # TODO: handle being behind schedule
+        # TODO: more logging
+        # TODO: handle being far from waypoint: kill
         self.wait_for_nodes('mocap_forwarder')
         self.report_diagnostics(level=0, message='Normal. Reaching waypoints.')
         self.takeoff()
@@ -413,6 +440,7 @@ class ControllerNode(IfoNode):
         self.reach_waypoint_list(waypoints_msg.data)
 
     def cb_velocity_cmd_in(self, velocity_cmd_msg):
+        # TODO. Allows for external velocity to just get forwarded to mavros.
         pass
 
     def reach_waypoint(self, waypoint):

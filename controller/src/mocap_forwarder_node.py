@@ -6,6 +6,8 @@ from geometry_msgs.msg import PoseStamped
 from time import sleep 
 from ifo_common.ifo_node import IfoNode
 
+# TODO. Handle not recieving mocap data.
+# TODO. Handle sporadic gaps in mocap data. Kill immediately.
 class MocapForwarderNode(IfoNode):
     def __init__(self):
         rospy.init_node('mocap_forwarder')
@@ -26,7 +28,7 @@ class MocapForwarderNode(IfoNode):
         who_am_i = rospy.get_namespace()
         if who_am_i == '/':
             rospy.loginfo(rospy.get_name() + ' not launched in a namespace. Assuming ifo001.')
-            who_am_i = '/ifo001/'
+            who_am_i = '/ifo001/' # TODO. Would be nice to ditch the assumption.
 
         self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
         self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
