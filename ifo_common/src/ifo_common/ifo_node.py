@@ -3,6 +3,7 @@ from std_msgs.msg import Bool
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from local_diagnostics.srv import GetNodeLevel, GetNodeLevelRequest
 from threading import Thread
+from mavros_msgs.srv import CommandLong, CommandLongRequest, CommandLongResponse
 
 # TODO: Add a self.wait_for_topics(topic_list) method.
 # TODO: Add custom logging functions that wrap rospy.loginfo, rospy.logwarn, etc
@@ -27,6 +28,7 @@ class IfoNode(object):
         self.report_diagnostics(**kwargs)
         self.wait_for_node(node_name)
         self.get_node_level()
+        self.kill_mission()
 
     Moreover, a `killswitch` has been implemented. Whenever any node reports an 
     ERROR to the local_diagnostics node, the local_diagnostics publishes a True 
@@ -60,12 +62,16 @@ class IfoNode(object):
         service_timeout = 10
         try:
             rospy.wait_for_service('local_diagnostics/get_node_level', service_timeout)
+            rospy.wait_for_service('mavros/cmd/command', service_timeout)
         except rospy.ROSException:
-            rospy.logwarn('local_diagnostics services not online.' \
+            rospy.logwarn('Some services not online.' \
                            + 'waiting until available.')
+
             rospy.wait_for_service('local_diagnostics/get_node_level')
+            rospy.wait_for_service('mavros/cmd/command', service_timeout)
 
         self.get_node_level_srv = rospy.ServiceProxy('local_diagnostics/get_node_level', GetNodeLevel)
+        self.mavros_cmd_srv = rospy.ServiceProxy('mavros/cmd/command', CommandLong)
 
         # Killswitch subscriber.
         self.ks_sub = rospy.Subscriber('local_diagnostics/killswitch', Bool, self._cb_killswitch)
@@ -98,6 +104,24 @@ class IfoNode(object):
         and the mission should end asap.
         """
         self.killswitch = killswitch_msg
+
+    def kill_mission(self):
+        """
+        Immediately kills motors on the drone. 
+
+        Taken from https://github.com/PX4/PX4-Autopilot/issues/14465 
+        """
+        req = CommandLongRequest()
+        req.broadcast = False
+        req.command = 400
+        req.confirmation = 0
+        req.param1 = 0.0
+        req.param2 = 21196.0
+        req.param4 = 0.0
+        req.param5 = 0.0
+        req.param6 = 0.0
+        req.param7 = 0.0
+        self.mavros_cmd_srv(req)
 
     def report_diagnostics(self, name = None, level = 0, message = '', 
                            hardware_id ='', values = []):
@@ -135,6 +159,13 @@ class IfoNode(object):
         diag_msg.status[0].values = values
         self.last_diag_msg = diag_msg
         self._diagnostics_pub.publish(diag_msg)    
+
+        if level == 0:
+            rospy.loginfo(message)
+        elif level == 1:
+            rospy.logwarn(message)
+        elif level == 2:
+            rospy.logerr(message)
 
     def get_node_level(self, node_name):
         """
