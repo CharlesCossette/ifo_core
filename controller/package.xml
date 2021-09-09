@@ -57,24 +57,22 @@
   <build_depend>rospy</build_depend>
   <build_export_depend>mavlink</build_export_depend>
   <build_export_depend>mavros</build_export_depend>
-  <build_export_depend>mavros_extra</build_export_depend>
+  <build_export_depend>mavros_extras</build_export_depend>
   <build_export_depend>mavros_msgs</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rospy</build_export_depend>
   <exec_depend>mavlink</exec_depend>
   <exec_depend>mavros</exec_depend>
-  <exec_depend>mavros_extra</exec_depend>
+  <exec_depend>mavros_extras</exec_depend>
   <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>rospy</exec_depend>
-  <exec_depend>diagnostics_aggregator</exec_depend>
-  <exec_depend>diagnostics_msgs</exec_depend>
-  <exec_depend>python-time</exec_depend>
-  <exec_depend>python-threading</exec_depend>
+  <exec_depend>diagnostic_aggregator</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>python-yaml</exec_depend>
-  <exec_depend>python-rospack</exec_depend>
+  <exec_depend>rospack</exec_depend>
   <exec_depend>python-scipy</exec_depend>
   <exec_depend>python-numpy</exec_depend>
 
