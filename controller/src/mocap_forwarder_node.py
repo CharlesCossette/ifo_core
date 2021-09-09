@@ -151,7 +151,7 @@ class MocapForwarderNode(IfoNode):
 
     def start(self):
 
-        max_mocap_delay = 0.1 # Seconds. If havnt recieved a new mocap measurement 
+        max_mocap_delay = 0.5 # Seconds. If havnt recieved a new mocap measurement 
                               # for this duration, we will kill mission.
 
         # Set the right PX4 parameters for when using mocap
