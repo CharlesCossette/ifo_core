@@ -11,7 +11,7 @@ from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
 from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
-from scipy.spatial.transform import Rotation as R
+from tf.transformations import euler_from_quaternion
 import numpy as np
 
 """
@@ -250,9 +250,8 @@ class ControllerNode(IfoNode):
             pz = self.pose.pose.position.x
         if yaw is None:
             q = self.pose.pose.orientation
-            r = R.from_quat([q.x, q.y, q.z, q.w])
-            angles = r.as_euler('zyx')
-            yaw = float(angles[0])            
+            (r,p,y) = euler_from_quaternion([q.x, q.y, q.z, q.w])
+            yaw = float(y)            
 
         self.set_position_command(px, py, pz, yaw)
 
