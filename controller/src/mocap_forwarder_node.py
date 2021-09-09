@@ -61,10 +61,10 @@ class MocapForwarderNode(IfoNode):
 
         # Give PX4 some time to be properly initialized before starting.
         rospy.sleep(15)
-        self.report_diagnostics(level=1, message='Ready.')
 
     def cb_mocap_pose(self, pose_msg):
         self.pose = pose_msg
+        self.last_rx_stamp = rospy.get_time()
 
     def set_parameter(self, param_id, value, timeout = 10):
         """
@@ -130,9 +130,31 @@ class MocapForwarderNode(IfoNode):
             rate.sleep()
         return resp.value, resp.success
 
-    def start(self):
-        # Set the right PX4 parameters for when using mocap
+    def wait_for_first_message(self, timeout = None):
+        """
+        Waits eternally until the first pose message is obtained.
+        """
+        self.report_diagnostics(level = 1, message ='Waiting for mocap data.')
+        if timeout is None:
+            timeout = 999999.0
 
+        start_time = rospy.get_time()
+        rate = rospy.Rate(3)
+        while not rospy.is_shutdown() and rospy.get_time() - start_time < timeout:
+            if self.pose is not None:
+                break
+
+            try:  # prevent garbage in console output when thread is killed
+                rate.sleep()
+            except rospy.ROSInterruptException:
+                pass
+
+    def start(self):
+
+        max_mocap_delay = 0.1 # Seconds. If havnt recieved a new mocap measurement 
+                              # for this duration, we will kill mission.
+
+        # Set the right PX4 parameters for when using mocap
         self.set_parameter('EKF2_HGT_MODE', 3)
         self.set_parameter('EKF2_AID_MASK', 0b000011000)
         self.set_parameter('EKF2_EV_DELAY', 0.0)
@@ -140,26 +162,41 @@ class MocapForwarderNode(IfoNode):
         self.set_parameter('EKF2_EV_POS_Y', 0.0)
         self.set_parameter('EKF2_EV_POS_Z', 0.0)  
         self.set_parameter('MAV_ODOM_LP', 1)   
+
+        self.wait_for_first_message()
+        self.report_diagnostics(level=0, message='Normal. Forwarding mocap data.')
         loop_freq = 40
         rate = rospy.Rate(40)
-        # TODO. Need a check here to see if we are getting mocap.
-        self.report_diagnostics(level=0, message='Normal. Forwarding mocap data.')
         while not rospy.is_shutdown():
-            self.pose_pub.publish(self.pose)
+            if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
+                # Report error to local diagnostics node.
+                # This should fire a killswitch 
+                self.report_diagnostics(level=2, message='ERROR. Interruption in mocap data!')
+                self.kill_mission()
+                break
+            
+            # TODO: check change of last message. 
+            else:
+                self.pose_pub.publish(self.pose)
+
+
             try:  # prevent garbage in console output when thread is killed
                 rate.sleep()
             except rospy.ROSInterruptException:
                 pass
 
-    def cb_shutdown(self):
+    def shutdown(self):
+        """
+        Gets executed on shutdown. Resets the PX4 parameters that were set by 
+        this node.
+        """
         # How do we know this will actually execute before PX4 is shut down?
-
         # Resets all the parameters
         for key, value in self.orig_params.items():
             self.set_parameter(key, value)
 
 if __name__ == "__main__":
     node = MocapForwarderNode()
-    rospy.on_shutdown(node.cb_shutdown)
+    rospy.on_shutdown(node.shutdown)
     node.start()
     rospy.spin() # Should only get here on shutdown
