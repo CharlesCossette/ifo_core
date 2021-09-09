@@ -158,11 +158,12 @@ class LocalDiagnosticsNode(object):
 
                 # Publish
                 self.summary_pub.publish(summary_msg) 
-                rate.sleep()
+                try:  # prevent garbage in console output when thread is killed
+                    rate.sleep()
+                except rospy.ROSInterruptException:
+                    pass
 
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
     local_diagnostics.start()
-
-    # Should never get here.
-    rospy.spin()
+    rospy.spin()  # Should only get here on shutdown

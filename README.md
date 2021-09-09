@@ -18,3 +18,9 @@ This node can be used as a mechanism to get nodes to "wait" for other nodes to b
 
 ### ifo_common
 This is primarily a python package which defined an abstract `IfoNode` that all nodes should inherit. An `IfoNode` provides an easy interface to the `local_diagnostics` node, and also automates periodic reporting.
+
+## Tests to eventually implement somehow
+
+- sudden mocap gap/failure
+- trying to start a mission without mocap
+- sudden discontinuity in mocap values

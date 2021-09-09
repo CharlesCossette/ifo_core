@@ -86,7 +86,10 @@ class IfoNode(object):
             if self.last_diag_msg is not None:
                 self.last_diag_msg.header.stamp = rospy.Time.now()
                 self._diagnostics_pub.publish(self.last_diag_msg)
-            rate.sleep()
+            try:  # prevent garbage in console output when thread is killed
+                rate.sleep()
+            except rospy.ROSInterruptException:
+                pass
 
     def _cb_killswitch(self, killswitch_msg):
         """

@@ -3,9 +3,20 @@ import rospy
 from mavros_msgs.srv import ParamGet, ParamSet
 from mavros_msgs.msg import ParamValue
 from geometry_msgs.msg import PoseStamped
-from time import sleep 
 from ifo_common.ifo_node import IfoNode
 
+"""
+The mocap forwarder node subscribes to mocap data available on the 
+/ifoXXX/vrpn_client_node/ifoXXX/pose topic, and eventually forwards it to
+/ifoXXX/mavros/vision_pose/pose topic so that PX4 can fuse this information,
+and use it for state estimation. 
+
+The node also sets various PX4 parameters to start accepting this info, as well
+as downsampling the frequency (40Hz from 200Hz). 
+
+Moreover, the node implements some basic checks of the validity of mocap data 
+in real time.
+"""
 # TODO. Handle not recieving mocap data.
 # TODO. Handle sporadic gaps in mocap data. Kill immediately.
 class MocapForwarderNode(IfoNode):
@@ -32,33 +43,65 @@ class MocapForwarderNode(IfoNode):
 
         self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
         self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
-        # TODO. Warning: vrpn_client_node needs to be run locally on each agent. Should we do this?
-        # or have a global node.
+        self.orig_params = {}
+        # Currently vrpn_client_node is run locally on each agent. Should we do this?
+        # or have a one node running on a laptop? We would need to understand
+        # vrpn clients for this. But afaik, if you have your laptop be the single
+        # vrpn client publishing the mocap data on ROS topics, and then the drones
+        # subscribe to those topics, then all the data needs to be routed through ZTO.
+        # On the other hand, if vrpn_client_node runs on each agent, then each 
+        # agent gets all the mocap data directly from the router, skipping ZTO,
+        # at the cost of much duplication of topics and possibly clogging ros 
+        # (but not even... still so much less info than a camera).
+        # 
+        # To me, agents each locally running a vrpn client seems logical. 
         self.pose_sub = rospy.Subscriber('vrpn_client_node' + who_am_i + 'pose', PoseStamped,
                                          self.cb_mocap_pose)
         self.pose_pub = rospy.Publisher('mavros/vision_pose/pose',PoseStamped, queue_size=1)
-        rospy.sleep(10)
+
+        # Give PX4 some time to be properly initialized before starting.
+        rospy.sleep(15)
         self.report_diagnostics(level=1, message='Ready.')
 
     def cb_mocap_pose(self, pose_msg):
         self.pose = pose_msg
 
     def set_parameter(self, param_id, value, timeout = 10):
-        # Sets an FCU parameter and verifies that it has been done. 
+        """
+        Sets an FCU parameter and verifies that it has been done. Also saves
+        the original parameter value for possible resetting later.
+        """
         rospy.loginfo('IFO_CORE: Setting FCU parameter ' + param_id + ' to: ' + str(value))
-        loop_freq = 2  # Hz
-        rate = rospy.Rate(loop_freq)
-        set_success = False
+
+        # Create legit ParamValue message.
         param_value = ParamValue()
         if isinstance(value, int):
             param_value.integer = value
         else:
             param_value.real = value
 
-        for i in xrange(timeout * loop_freq):
-            # TODO. We appear to be getting stuck here when the service fails.
+        # Get and save the original value
+        orig_value, get_success = self.get_parameter(param_id) 
+        if isinstance(value, int):
+            orig_value = orig_value.integer
+        else:
+            orig_value = orig_value.real
+        if get_success:
+            if param_id not in self.orig_params:
+                self.orig_params[param_id] = orig_value
+        else: 
+            rospy.loginfo('IFO_CORE: Setting FCU parameter ' + param_id + ': FAILED')
+            return False
+
+        # Loop until the setting is done, with timeout   
+        loop_freq = 2  # Hz
+        rate = rospy.Rate(loop_freq)
+        set_success = False
+        start_time = rospy.get_time()
+        count = 0 # failsafe to not enter infinite loop
+        while rospy.get_time() - start_time < timeout and count < 100:
             resp = self.set_param_srv(param_id, param_value)
-            value_check, _ = self.get_parameter(param_id) 
+            value_check, _ = self.get_parameter(param_id, timeout = 2) 
             if isinstance(value, int):
                 value_check = value_check.integer
             else:
@@ -68,11 +111,16 @@ class MocapForwarderNode(IfoNode):
                 set_success = True
                 break
             rate.sleep()
+            count = count + 1
+
         if not set_success:
             rospy.loginfo('IFO_CORE: Setting FCU parameter ' + param_id + ': FAILED')
         return set_success
 
     def get_parameter(self, param_id, timeout = 10):
+        """
+        Reads a PX4 parameter value.
+        """
         loop_freq = 2  # Hz
         rate = rospy.Rate(loop_freq)
         for i in xrange(timeout * loop_freq):
@@ -98,8 +146,20 @@ class MocapForwarderNode(IfoNode):
         self.report_diagnostics(level=0, message='Normal. Forwarding mocap data.')
         while not rospy.is_shutdown():
             self.pose_pub.publish(self.pose)
-            rate.sleep()
+            try:  # prevent garbage in console output when thread is killed
+                rate.sleep()
+            except rospy.ROSInterruptException:
+                pass
+
+    def cb_shutdown(self):
+        # How do we know this will actually execute before PX4 is shut down?
+
+        # Resets all the parameters
+        for key, value in self.orig_params.items():
+            self.set_parameter(key, value)
 
 if __name__ == "__main__":
     node = MocapForwarderNode()
+    rospy.on_shutdown(node.cb_shutdown)
     node.start()
+    rospy.spin() # Should only get here on shutdown
