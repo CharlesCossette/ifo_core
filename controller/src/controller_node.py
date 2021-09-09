@@ -12,6 +12,7 @@ from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
 from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 """
 The controller node provides the main interface to mavros. It provides basic 
@@ -276,6 +277,7 @@ class ControllerNode(IfoNode):
                 rospy.logwarn('Landing state still not detected. Killing.')
                 self.report_diagnostics(level=2, message='Landing failed. Killing')
                 self.killswitch = True
+                self.kill_mission()
     
     def set_mode(self, mode, timeout):
         """ 
@@ -435,8 +437,9 @@ class ControllerNode(IfoNode):
             rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
 
     def reach_waypoint_list(self, waypoint_list):
-        # TODO: handle being far from waypoint: kill. i.e. if distance to target
-        # waitpoint is increasing significantly
+        """
+        Reaches a WaypointList one by one.
+        """
 
         # Sort waypoints
         waypoint_list.sort(key = lambda x: x.time)
@@ -477,7 +480,7 @@ class ControllerNode(IfoNode):
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
-                + 'yaw: ' + str(wp.yaw))
+                + ' yaw: ' + str(wp.yaw))
 
             # Stall until time of next waypoint
             time_until_wp = float(wp.time - rospy.get_time())
@@ -486,8 +489,7 @@ class ControllerNode(IfoNode):
                 rospy.sleep(time_until_wp)
                 time_until_wp = float(wp.time - rospy.get_time())
 
-
-            self.set_position_command(wp.x, wp.y, wp.z, wp.yaw)
+            self.reach_waypoint(wp, timeout = 10)
 
             self.report_diagnostics(level = 0, message = 
                 'Reaching WP #' + str(current_wp_idx + 1) 
@@ -495,7 +497,7 @@ class ControllerNode(IfoNode):
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
-                + 'yaw: ' + str(wp.yaw))
+                + ' yaw: ' + str(wp.yaw))
             current_wp_idx = current_wp_idx + 1
 
         # Ideally need feedback logic on reaching waypoint
@@ -504,17 +506,48 @@ class ControllerNode(IfoNode):
         self.report_diagnostics(level=0, message='Normal. Idle.')
     
     def cb_waypoints_in(self, waypoints_msg):
-        print(waypoints_msg)
         self.reach_waypoint_list(waypoints_msg.data)
 
     def cb_velocity_cmd_in(self, velocity_cmd_msg):
         # TODO. Allows for external velocity to just get forwarded to mavros.
         pass
 
-    def reach_waypoint(self, waypoint):
-        pass
+    def reach_waypoint(self, wp, timeout):
+        """
+        Reaches a single Waypoint and confirms with state estimate feedback.
+
+        Will trigger a failsafe if the distance to waypoint is greater than 1.5
+        meters from the initial distance.
+        """
+        reach_threshold = 0.5 # distance in meters
+        wp_pos = np.array([wp.x, wp.y, wp.z])
+        pos = self.pose.pose.position
+        my_pos = np.array([pos.x, pos.y, pos.z])
+        starting_d = np.linalg.norm(wp_pos - my_pos)
+        
+        self.set_position_command(wp.x, wp.y, wp.z, wp.yaw)
+        
+        d = starting_d
+        loop_freq = 10
+        rate = rospy.Rate(10)
+        
+        for i in xrange(timeout * loop_freq):
+            if rospy.is_shutdown():
+                break
+            if d < reach_threshold:
+                rospy.loginfo('Successfully reached waypoint.')
+                break 
+
+            pos = self.pose.pose.position
+            my_pos = np.array([pos.x, pos.y, pos.z])
+            d = np.linalg.norm(wp_pos - my_pos)
+            if d > starting_d + 1.5:
+                self.report_diagnostics(level = 2, message = 'ERROR: Failing to reach WP')
+                self.kill_mission()
+        
 
 if __name__ == "__main__":
     controller = ControllerNode()
+    rospy.on_shutdown(controller.kill_mission)
     rospy.spin()
 
