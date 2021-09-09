@@ -180,6 +180,7 @@ class IfoNode(object):
         """
         Waits for a specific node(s) to report a level of 0.
         """
+        # TODO: what if the age is very old?
         rospy.loginfo('Waiting for ' + str(node_names) + ' to be ready.')
         rate = rospy.Rate(polling_frequency)
         nodes_ready = False

@@ -75,6 +75,7 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>python-yaml</exec_depend>
   <exec_depend>python-rospack</exec_depend>
+  <exec_depend>python-scipy</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

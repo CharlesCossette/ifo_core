@@ -11,6 +11,7 @@ from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
 from controller.msg import Waypoint, WaypointList
 import rospkg
 from ifo_common.ifo_node import IfoNode
+from scipy.spatial.transform import Rotation as R
 
 """
 The controller node provides the main interface to mavros. It provides basic 
@@ -167,7 +168,7 @@ class ControllerNode(IfoNode):
 
         return preflight_passed
 
-    def takeoff(self, target_altitude = 1, timeout = 20):
+    def takeoff(self, target_altitude = 1, timeout = 10):
         """
         Arms the quadcopter, and increases altitude until the target altitude is
         reached. RELIES ON STATE ESTIMATE FEEDBACK.
@@ -203,10 +204,9 @@ class ControllerNode(IfoNode):
         
     def hold_altitude(self, target_altitude = None, duration = 1):
         """
-        Holds the quadcopter at a specified target_altitude for a specified
-        duration, then the function exits.
-
-        If target_altitude is left blank, current altitude is used as the target.
+        Holds the quadcopter at current altitude unless overridden by arguments.
+        Uses a simple proportional feedback law, and will keep updating the 
+        control command for a user-specified duration.
 
         USES STATE ESTIMATE FEEDBACK. WARNING: X,Y,YAW will drift as these are 
         left uncontrolled/open loop.
@@ -230,6 +230,30 @@ class ControllerNode(IfoNode):
             rate.sleep()
 
         self.set_velocity_command(0,0,0,0)
+
+    def hold_position(self, px = None, py = None, pz = None, yaw = None):
+        """
+        Sets the position command to current position, unless overridden by arguments.
+
+        USES STATE ESTIMATE FEEDBACK. WARNING: X,Y,YAW will drift as these are 
+        left uncontrolled/open loop.
+        """
+        
+        loop_freq = 50 # Hz
+        rate = rospy.Rate(loop_freq)
+        if px is None:
+            px = self.pose.pose.position.x
+        if py is None:
+            py = self.pose.pose.position.y
+        if pz is None:
+            pz = self.pose.pose.position.x
+        if yaw is None:
+            q = self.pose.pose.orientation
+            r = R.from_quat([q.x, q.y, q.z, q.w])
+            angles = r.as_euler('zyx')
+            yaw = float(angles[0])            
+
+        self.set_position_command(px, py, pz, yaw)
 
     def land(self):
         """ 
@@ -411,27 +435,71 @@ class ControllerNode(IfoNode):
             rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
 
     def reach_waypoint_list(self, waypoint_list):
-        # TODO: Sort list before reaching waypoints.
-        # TODO: bug in the logic somewhere
-        # TODO: handle being behind schedule
-        # TODO: more logging
-        # TODO: handle being far from waypoint: kill
+        # TODO: handle being far from waypoint: kill. i.e. if distance to target
+        # waitpoint is increasing significantly
+
+        # Sort waypoints
+        waypoint_list.sort(key = lambda x: x.time)
+
         self.wait_for_nodes('mocap_forwarder')
         self.report_diagnostics(level=0, message='Normal. Reaching waypoints.')
         self.takeoff()
-        first_waypoint = True
-        for wp in waypoint_list:
-            t_waypoint = wp.time
-            while rospy.get_time() < t_waypoint:
-                if first_waypoint:
-                    self.hold_altitude(target_altitude=1,duration=0.01)
-                else:
-                    rospy.sleep(0.01)
-            print(wp)
-            self.set_position_command(px=wp.x, py=wp.y, pz=wp.z, yaw=wp.yaw)
-            first_waypoint = False
+        self.hold_position(pz = 1)
 
-        rospy.sleep(5)
+        # We may already be behind schedule. determine where we are in the
+        # waypoint list and skip to the waypoint that we should be at.
+        current_wp = None
+        current_wp_idx = -1
+        for idx, wp in enumerate(waypoint_list):
+            if wp.time < rospy.get_time():
+                current_wp = wp # Then we should already be at this waypoint.
+                current_wp_idx = idx
+
+        if current_wp is not None:
+            wp = current_wp
+            # Go to that waypoint
+            self.set_position_command(
+                wp.x, wp.y, wp.z, wp.yaw
+                )
+            self.report_diagnostics(level = 0, message = 
+                'Reaching WP #' + str(current_wp_idx) 
+                + ' time: ' + str(wp.time) 
+                + ' x: ' + str(wp.x) 
+                + ' y: ' + str(wp.y) 
+                + ' z: ' + str(wp.z) 
+                + 'yaw: ' + str(wp.yaw))
+        
+        # Now go to each waypoint one by one
+        for wp in waypoint_list[(current_wp_idx + 1):]:
+            self.report_diagnostics(level = 0, message = 
+                'Holding until WP #' + str(current_wp_idx + 1) 
+                + ' time: ' + str(wp.time) 
+                + ' x: ' + str(wp.x) 
+                + ' y: ' + str(wp.y) 
+                + ' z: ' + str(wp.z) 
+                + 'yaw: ' + str(wp.yaw))
+
+            # Stall until time of next waypoint
+            time_until_wp = float(wp.time - rospy.get_time())
+            while time_until_wp > 0: 
+                # This is the main stalling loop, so should implement checks here.
+                rospy.sleep(time_until_wp)
+                time_until_wp = float(wp.time - rospy.get_time())
+
+
+            self.set_position_command(wp.x, wp.y, wp.z, wp.yaw)
+
+            self.report_diagnostics(level = 0, message = 
+                'Reaching WP #' + str(current_wp_idx + 1) 
+                + ' time: ' + str(wp.time) 
+                + ' x: ' + str(wp.x) 
+                + ' y: ' + str(wp.y) 
+                + ' z: ' + str(wp.z) 
+                + 'yaw: ' + str(wp.yaw))
+            current_wp_idx = current_wp_idx + 1
+
+        # Ideally need feedback logic on reaching waypoint
+        rospy.sleep(3) 
         self.land()
         self.report_diagnostics(level=0, message='Normal. Idle.')
     

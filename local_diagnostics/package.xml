@@ -56,7 +56,7 @@
   <exec_depend>diagnostic_aggregator</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>rospy</exec_depend>
-  <exec_depend>python-pandas</exec_depend>
+  <exec_depend>python-scipy</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
