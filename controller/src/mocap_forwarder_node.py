@@ -58,7 +58,7 @@ class MocapForwarderNode(IfoNode):
         self.pose_sub = rospy.Subscriber('vrpn_client_node' + who_am_i + 'pose', PoseStamped,
                                          self.cb_mocap_pose)
         self.pose_pub = rospy.Publisher('mavros/vision_pose/pose',PoseStamped, queue_size=1)
-
+        self.pose = None
         # Give PX4 some time to be properly initialized before starting.
         rospy.sleep(15)
 
