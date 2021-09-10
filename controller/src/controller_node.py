@@ -440,12 +440,14 @@ class ControllerNode(IfoNode):
         Reaches a WaypointList one by one.
         """
 
-        # Sort waypoints
-        waypoint_list.sort(key = lambda x: x.time, reverse = False)
+        rospy.loginfo('WP List:' + str(waypoint_list))
 
+        # Sort waypoints
+        waypoint_list.sort(key = lambda x: x.time)
+        rospy.loginfo('WP List Sorted:' + str(waypoint_list))
+        
         self.wait_for_nodes('mocap_forwarder')
         self.report_diagnostics(level=0, message='Normal. Reaching waypoints.')
-        rospy.loginfo('WP List:' + str(waypoint_list))
         self.takeoff()
         self.hold_position(pz = 1)
 
@@ -516,6 +518,7 @@ class ControllerNode(IfoNode):
         self.report_diagnostics(level=0, message='Normal. Idle.')
     
     def cb_waypoints_in(self, waypoints_msg):
+        rospy.loginfo(waypoints_msg)
         self.reach_waypoint_list(waypoints_msg.data)
 
     def cb_velocity_cmd_in(self, velocity_cmd_msg):
