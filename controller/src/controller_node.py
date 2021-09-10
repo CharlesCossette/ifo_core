@@ -441,10 +441,11 @@ class ControllerNode(IfoNode):
         """
 
         # Sort waypoints
-        waypoint_list.sort(key = lambda x: x.time)
+        waypoint_list.sort(key = lambda x: x.time, reverse = False)
 
         self.wait_for_nodes('mocap_forwarder')
         self.report_diagnostics(level=0, message='Normal. Reaching waypoints.')
+        rospy.loginfo('WP List:' + str(waypoint_list))
         self.takeoff()
         self.hold_position(pz = 1)
 
@@ -453,16 +454,19 @@ class ControllerNode(IfoNode):
         current_wp = None
         current_wp_idx = -1
         for idx, wp in enumerate(waypoint_list):
-            if wp.time < rospy.get_time():
+            t_now = rospy.get_time()
+            if t_now > wp.time:
                 current_wp = wp # Then we should already be at this waypoint.
                 current_wp_idx = idx
+                self.report_diagnostics(level = 0, message = 
+                'Beyond WP #' + str(current_wp_idx) 
+                + ' time: ' + str(wp.time) 
+                + ' current time: ' + str(t_now))
 
+        # If there is a waypoint that we should already be at
         if current_wp is not None:
             wp = current_wp
-            # Go to that waypoint
-            self.set_position_command(
-                wp.x, wp.y, wp.z, wp.yaw
-                )
+
             self.report_diagnostics(level = 0, message = 
                 'Reaching WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
@@ -470,11 +474,17 @@ class ControllerNode(IfoNode):
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
                 + 'yaw: ' + str(wp.yaw))
+
+            # Go to that waypoint
+            self.reach_waypoint(wp, timeout = 10)
+            
+        current_wp_idx = current_wp_idx + 1
         
-        # Now go to each waypoint one by one
-        for wp in waypoint_list[(current_wp_idx + 1):]:
+        # Now go to each remaining waypoint one by one
+        remaining_wp_list = waypoint_list[current_wp_idx:]
+        for wp in remaining_wp_list:
             self.report_diagnostics(level = 0, message = 
-                'Holding until WP #' + str(current_wp_idx + 1) 
+                'Holding until WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
@@ -488,15 +498,16 @@ class ControllerNode(IfoNode):
                 rospy.sleep(time_until_wp)
                 time_until_wp = float(wp.time - rospy.get_time())
 
-            self.reach_waypoint(wp, timeout = 10)
-
             self.report_diagnostics(level = 0, message = 
-                'Reaching WP #' + str(current_wp_idx + 1) 
+                'Reaching WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
                 + ' yaw: ' + str(wp.yaw))
+
+            self.reach_waypoint(wp, timeout = 10)
+
             current_wp_idx = current_wp_idx + 1
 
         # Ideally need feedback logic on reaching waypoint
