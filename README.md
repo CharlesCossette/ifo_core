@@ -1,3 +1,4 @@
+test
 # IFO Core
 This repo consists of a collection of ROS packages running the core autonomy stack on Uvify IFO-S quadcopter. It is primarily intended to be contained with general-purpose functionality that is project-independent. This should be cloned on the agents themselves, as well as on a local computer when running SITL.
 
