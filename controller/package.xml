@@ -73,7 +73,7 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>python-yaml</exec_depend>
   <exec_depend>rospack</exec_depend>
-  <exec_depend>python-scipy</exec_depend>
+  <exec_depend>tf</exec_depend>
   <exec_depend>python-numpy</exec_depend>
 
 
