@@ -14,17 +14,15 @@ from ifo_common.ifo_node import IfoNode
 from tf.transformations import euler_from_quaternion
 import numpy as np
 
-"""
-The controller node provides the main interface to mavros. It provides basic 
-procedures for takeoff, landing, altitude holding, and reaching waypoints.
-
-Currently, it is mainly build under the assumption that mocap data is being 
-streamed to the drone regularly.
-"""
-
 
 class ControllerNode(IfoNode):
     """
+    The controller node provides the main interface to mavros. It provides basic 
+    procedures for takeoff, landing, altitude holding, and reaching waypoints.
+
+    Currently, it is mainly build under the assumption that mocap data is being 
+    streamed to the drone regularly.
+
     This class starts a thread which continuously publishes its own 
     `setpoint_msg` property on the /mavros/setpoint_raw/local topic.
 

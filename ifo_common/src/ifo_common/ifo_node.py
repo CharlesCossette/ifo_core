@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 import rospy
 from std_msgs.msg import Bool
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
@@ -6,7 +7,6 @@ from threading import Thread
 from mavros_msgs.srv import CommandLong, CommandLongRequest, CommandLongResponse
 
 # TODO: Add a self.wait_for_topics(topic_list) method.
-# TODO: Add custom logging functions that wrap rospy.loginfo, rospy.logwarn, etc
 
 class IfoNode(object):
     """
@@ -36,13 +36,15 @@ class IfoNode(object):
     this sets the internal variable `self.killswitch` to true as soon as this occurs.
     As such, the inheriter can check `self.killswitch` at any time to see if 
     the killswitch has been activated.
+
+    If the user chooses by setting diagnostics_thread = True in the 
+    constructor, the latest diagnostic message will be re-published to the
+    local_diagnostics node. This can be used as a "heartbeat" to indicate
+    the node is alive and running.
     """
     def __init__(self, diagnostics_thread = False):
         """
-        If the user chooses by setting diagnostics_thread = True in the 
-        constructor, the latest diagnostic message will be re-published to the
-        local_diagnostics node. This can be used as a "heartbeat" to indicate
-        the node is alive and running.
+        Constructor
         """
         super(IfoNode, self).__init__()
 
@@ -196,7 +198,5 @@ class IfoNode(object):
                     nodes_ready = False
             rate.sleep()
         
-        rospy.loginfo('Node(s) ' + str(node_names) + ' are ready.')
-        
-
+        rospy.loginfo('Node(s) ' + str(node_names) + ' are ready.')        
     
