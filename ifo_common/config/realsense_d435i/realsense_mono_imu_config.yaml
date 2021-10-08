@@ -5,8 +5,8 @@
 imu: 1         
 num_of_cam: 1
 
-imu_topic: "/realsense/imu"
-image0_topic: "/realsense/color/image_raw"
+imu_topic: "/camera/imu"
+image0_topic: "/camera/color/image_raw"
 output_path: "~/output/"
 
 cam0_calib: "left.yaml"

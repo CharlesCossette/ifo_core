@@ -20,7 +20,7 @@ class ControllerNode(IfoNode):
     The controller node provides the main interface to mavros. It provides basic 
     procedures for takeoff, landing, altitude holding, and reaching waypoints.
 
-    Currently, it is mainly build under the assumption that mocap data is being 
+    Currently, it is mainly built under the assumption that mocap data is being 
     streamed to the drone regularly.
 
     This class starts a thread which continuously publishes its own 
