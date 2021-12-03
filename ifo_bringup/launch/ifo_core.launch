@@ -1,18 +1,18 @@
 <launch>
-    <arg name="enable_vins" default="true"/>
-    <arg name="enable_mocap_fusion" default="true"/>
+    <arg name="use_vins" default="true"/>
+    <arg name="use_mocap_fusion" default="true"/>
     
     <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
 
     <node name="local_diagnostics" output="screen" pkg="local_diagnostics" 
         type="local_diagnostics_node.py"/>
     
-    <group if="$(arg enable_mocap_fusion)">
+    <group if="$(arg use_mocap_fusion)">
         <node name="mocap_forwarder" output="screen" pkg="controller" 
             type="mocap_forwarder_node.py"/>
     </group>
 
-    <group if="$(arg enable_vins)">
+    <group if="$(arg use_vins)">
         <node name="vins_fusion" output="screen" pkg="vins" type="vins_node"
         args="$(find ifo_common)/config/realsense_d435i/realsense_mono_imu_config.yaml"/>
     </group>

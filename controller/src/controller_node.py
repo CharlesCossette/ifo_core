@@ -7,13 +7,10 @@ from mavros_msgs.msg import State, PositionTarget, AttitudeTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header, Bool
 from threading import Thread
-from diagnostic_msgs.msg import DiagnosticStatus, DiagnosticArray, KeyValue
-from controller.msg import Waypoint, WaypointList
-import rospkg
+from controller.msg import WaypointList
 from ifo_common.ifo_node import IfoNode
 from tf.transformations import euler_from_quaternion
 import numpy as np
-
 
 class ControllerNode(IfoNode):
     """
@@ -28,7 +25,7 @@ class ControllerNode(IfoNode):
 
     The command-sending has been abstracted away into 
 
-        self.set_velocity_command(vx, vy, vz, yr)
+        self.set_velocity_command(vx, vy, vz, yaw_rate)
         self.set_position_command(px, py, pz, yaw)
     """
     def __init__(self):
@@ -64,11 +61,15 @@ class ControllerNode(IfoNode):
         self.ext_state_data_sub = rospy.Subscriber('mavros/extended_state', ExtendedState,
                                                self.cb_mavros_extended_state)
         self.pose_sub = rospy.Subscriber('mavros/local_position/pose', PoseStamped,
-                                               self.cb_mavros_pose)
+                                               self.cb_mavros_pose)                                        
         self.waypoints_sub = rospy.Subscriber('controller/waypoints_in', WaypointList,
                                                self.cb_waypoints_in)
         self.velocity_cmd_sub = rospy.Subscriber('controller/velocity_cmd_in', PositionTarget,
                                                self.cb_velocity_cmd_in)
+        self.takeoff_sub = rospy.Subscriber('controller/takeoff', Bool,
+                                               self.cb_takeoff)
+        self.land_sub = rospy.Subscriber('controller/land', Bool,
+                                               self.cb_land)
 
         # Publishers
         self.setpoint_pub = rospy.Publisher(
@@ -105,6 +106,12 @@ class ControllerNode(IfoNode):
     
     def cb_mavros_imu(self, imu_msg):
         self.ready_topics['imu'] = True
+
+    def cb_takeoff(self, msg):
+        self.takeoff()
+
+    def cb_land(self, msg):
+        self.land()
 
     def send_setpoint(self):
         """
@@ -150,7 +157,7 @@ class ControllerNode(IfoNode):
         loop_freq = 5
         rate = rospy.Rate(loop_freq)
         preflight_passed = False
-        for i in xrange(loop_freq * timeout):    
+        for i in range(loop_freq * timeout):    
             # Checks:
             # - thread is ready
             # - services online
@@ -314,10 +321,13 @@ class ControllerNode(IfoNode):
         loop_freq = 1  # Hz
         rate = rospy.Rate(loop_freq)
         set_success = False
-        for i in xrange(timeout * loop_freq):
+        for i in range(timeout * loop_freq):
             if self.state.armed == arm:
-                rospy.loginfo("IFO_CORE: set arm success | seconds: {0} of {1}".format(
-                    i / loop_freq, timeout))
+                rospy.loginfo(
+                    "IFO_CORE: set arm success | seconds: {0} of {1}".format(
+                        i / loop_freq, timeout
+                        )
+                    )
                 set_success = True
                 break     
             else:
@@ -331,7 +341,7 @@ class ControllerNode(IfoNode):
             rate.sleep()
         return set_success
 
-    def set_velocity_command(self, vx = 0, vy = 0, vz = 0, yr = 0):
+    def set_velocity_command(self, vx = 0, vy = 0, vz = 0, yaw_rate = 0):
         """ 
         Sets the velocity command to the internal setpoint_msg variable.
         A seperate thread sends the setpoint_msg to the PX4 controller.
@@ -351,7 +361,7 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.velocity.x = vx
         self.setpoint_msg.velocity.y = vy
         self.setpoint_msg.velocity.z = vz
-        self.setpoint_msg.yaw_rate = yr
+        self.setpoint_msg.yaw_rate = yaw_rate
 
     def set_position_command(self, px = 0, py = 0, pz = 0, yaw = 0):
         """ 
@@ -389,7 +399,7 @@ class ControllerNode(IfoNode):
         loop_freq = 10  # Hz
         rate = rospy.Rate(loop_freq)
         landed_state_confirmed = False
-        for i in xrange(timeout * loop_freq):
+        for i in range(timeout * loop_freq):
             if self.extended_state.landed_state == 1: # 1 for landed, 0 for not landed
                 landed_state_confirmed = True
                 rospy.loginfo("IFO_CORE: landed state confirmed | seconds: {0} of {1}".
@@ -398,40 +408,6 @@ class ControllerNode(IfoNode):
 
             rate.sleep()
         return landed_state_confirmed
-
-    def load_waypoint_list(self, filename = None):
-        """ 
-        DEPRECATED. 
-        Reads the yaml file located at /controller/config/waypoint_list.yaml
-        """
-        rp = rospkg.RosPack()
-        if filename is None:            
-            path = rp.get_path('controller')
-            filename = path + '/config/waypoint_list.yaml'
-
-        with open(filename) as file:
-            waypoint_list = yaml.load(file, Loader=yaml.FullLoader)
-
-        who_am_i = rospy.get_namespace()
-        if who_am_i == '/':
-            rospy.loginfo('Controller node not launched in a namespace. Assuming ifo001.')
-            who_am_i = 'ifo001'
-        else:
-            who_am_i = who_am_i.strip('/')
-
-        if who_am_i in waypoint_list:
-            temp = waypoint_list[who_am_i]
-            my_waypoint_list = []
-            for key, value in temp.iteritems():
-                wp = {key: value[key] for key in ['x','y','z','yaw']}
-                my_waypoint_list.append((value['time'], wp))
-
-            # Sort by time.
-            my_waypoint_list = sorted(my_waypoint_list, key=lambda x: x[0])
-            self.waypoint_list = my_waypoint_list
-            print(self.waypoint_list)
-        else:
-            rospy.logwarn('Cannot find ' + who_am_i + ' in waypoint list.')
 
     def reach_waypoint_list(self, waypoint_list):
         """
@@ -458,22 +434,25 @@ class ControllerNode(IfoNode):
             if t_now > wp.time:
                 current_wp = wp # Then we should already be at this waypoint.
                 current_wp_idx = idx
-                self.report_diagnostics(level = 0, message = 
-                'Beyond WP #' + str(current_wp_idx) 
+                self.report_diagnostics(level = 0,
+                message = 'Beyond WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
-                + ' current time: ' + str(t_now))
+                + ' current time: ' + str(t_now)
+                )
 
         # If there is a waypoint that we should already be at
         if current_wp is not None:
             wp = current_wp
 
-            self.report_diagnostics(level = 0, message = 
-                'Reaching WP #' + str(current_wp_idx) 
+            self.report_diagnostics(
+                level = 0,
+                message = 'Reaching WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
-                + 'yaw: ' + str(wp.yaw))
+                + 'yaw: ' + str(wp.yaw)
+                )
 
             # Go to that waypoint
             self.reach_waypoint(wp, timeout = 10)
@@ -483,13 +462,15 @@ class ControllerNode(IfoNode):
         # Now go to each remaining waypoint one by one
         remaining_wp_list = waypoint_list[current_wp_idx:]
         for wp in remaining_wp_list:
-            self.report_diagnostics(level = 0, message = 
-                'Holding until WP #' + str(current_wp_idx) 
+            self.report_diagnostics(
+                level = 0,
+                message = 'Holding until WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
-                + ' yaw: ' + str(wp.yaw))
+                + ' yaw: ' + str(wp.yaw)
+                )
 
             # Stall until time of next waypoint
             time_until_wp = float(wp.time - rospy.get_time())
@@ -498,13 +479,15 @@ class ControllerNode(IfoNode):
                 rospy.sleep(time_until_wp)
                 time_until_wp = float(wp.time - rospy.get_time())
 
-            self.report_diagnostics(level = 0, message = 
-                'Reaching WP #' + str(current_wp_idx) 
+            self.report_diagnostics(
+                level = 0,
+                message = 'Reaching WP #' + str(current_wp_idx) 
                 + ' time: ' + str(wp.time) 
                 + ' x: ' + str(wp.x) 
                 + ' y: ' + str(wp.y) 
                 + ' z: ' + str(wp.z) 
-                + ' yaw: ' + str(wp.yaw))
+                + ' yaw: ' + str(wp.yaw)
+                )
 
             self.reach_waypoint(wp, timeout = 10)
 
@@ -519,9 +502,27 @@ class ControllerNode(IfoNode):
         rospy.loginfo(waypoints_msg)
         self.reach_waypoint_list(waypoints_msg.data)
 
-    def cb_velocity_cmd_in(self, velocity_cmd_msg):
-        # TODO. Allows for external velocity to just get forwarded to mavros.
+    def cb_position_cmd_in(self, velocity_cmd_msg):
+        # TODO. Allows for external position to just get forwarded to mavros.
         pass
+
+    def cb_velocity_cmd_in(self, velocity_cmd_msg):
+        """
+        Allows for an external (body frame) velocity command, which will be 
+        forwarded to mavros.
+
+        Performs takeoff if an upward velocity command is sent.
+        """
+        if self.extended_state.landed_state == 1: # 1 for landed, 0 for not landed
+            if velocity_cmd_msg.velocity.z > 0.1:
+                self.takeoff()
+                
+        self.set_velocity_command(
+            velocity_cmd_msg.velocity.x,
+            velocity_cmd_msg.velocity.y,
+            velocity_cmd_msg.velocity.z,
+            velocity_cmd_msg.yaw_rate
+        )
 
     def reach_waypoint(self, wp, timeout):
         """
@@ -542,7 +543,7 @@ class ControllerNode(IfoNode):
         loop_freq = 10
         rate = rospy.Rate(10)
         
-        for i in xrange(timeout * loop_freq):
+        for i in range(timeout * loop_freq):
             if rospy.is_shutdown():
                 break
             if d < reach_threshold:
@@ -553,7 +554,10 @@ class ControllerNode(IfoNode):
             my_pos = np.array([pos.x, pos.y, pos.z])
             d = np.linalg.norm(wp_pos - my_pos)
             if d > starting_d + 1.5:
-                self.report_diagnostics(level = 2, message = 'ERROR: Failing to reach WP')
+                self.report_diagnostics(
+                    level = 2,
+                    message = 'ERROR: Failing to reach WP'
+                    )
                 self.kill_mission()
         
 

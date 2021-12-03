@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+from threading import local
 import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from std_msgs.msg import Bool
@@ -162,8 +163,11 @@ class LocalDiagnosticsNode(object):
                     rate.sleep()
                 except rospy.ROSInterruptException:
                     pass
+    def cb_shutdown(self):
+        self.summary_pub.unregister()
 
 if __name__ == "__main__":
     local_diagnostics = LocalDiagnosticsNode()
+    rospy.on_shutdown(local_diagnostics.cb_shutdown)
     local_diagnostics.start()
     rospy.spin()  # Should only get here on shutdown
