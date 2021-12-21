@@ -1,5 +1,5 @@
 <launch>
-    <arg name="use_vins" default="true"/>
+    <arg name="use_vins" default="false"/>
     <arg name="use_mocap_fusion" default="true"/>
     
     <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>

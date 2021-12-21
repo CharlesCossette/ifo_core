@@ -39,7 +39,7 @@ class MocapForwarderNode(IfoNode):
         who_am_i = rospy.get_namespace()
         if who_am_i == '/':
             rospy.loginfo(rospy.get_name() + ' not launched in a namespace. Assuming ifo001.')
-            who_am_i = '/ifo001/' # TODO. Would be nice to ditch the assumption.
+            who_am_i = '/ifo001/' # TODO. Would be nice to ditch this.
 
         self.set_param_srv = rospy.ServiceProxy('mavros/param/set', ParamSet)
         self.get_param_srv = rospy.ServiceProxy('mavros/param/get', ParamGet)
