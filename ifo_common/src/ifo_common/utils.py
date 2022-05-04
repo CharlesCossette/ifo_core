@@ -6,7 +6,7 @@ from geometry_msgs.msg import (
     PoseWithCovariance,
 )
 import numpy as np
-
+import rospy
 
 class DictObj:
     """
@@ -81,3 +81,33 @@ def pose_msg_to_matrix(pose):
         return T
     else:
         raise TypeError()
+
+def parametrized(dec):
+    def layer(*args, **kwargs):
+        def repl(f):
+            return dec(f, *args, **kwargs)
+        return repl
+    return layer
+
+@parametrized
+def retry_if_false(func, timeout = 1, freq = 1, log_msg = ""):
+    """
+    Decorator which will make the function re-execute if it returns a False.
+    """
+    def wrapper(*args, **kwargs):
+        rate = rospy.Rate(freq)
+        N = timeout * freq
+        success = False
+        for i in range(N):
+            try:
+                success = func(*args, **kwargs)
+            except rospy.ServiceException as e:
+                rospy.logerr(e)
+            success_string = "success" if success else "fail"
+
+            rospy.loginfo(log_msg + ": attempt {0} of {1} = ".format(i, N) + str(success_string))
+            if success == True:
+                break
+            rate.sleep()
+        return success 
+    return wrapper

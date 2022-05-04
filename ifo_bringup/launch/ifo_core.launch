@@ -2,7 +2,7 @@
     <arg name="use_vins" default="false"/>
     <arg name="use_mocap_fusion" default="true"/>
     
-    <node name="controller" output="screen" pkg="controller" type="controller_node.py"/>
+    <node name="controller" output="screen" pkg="controller" type="waypoint_controller_node.py"/>
 
     <node name="local_diagnostics" output="screen" pkg="local_diagnostics" 
         type="local_diagnostics_node.py"/>

@@ -1,27 +1,28 @@
 #!/usr/bin/env python2
 import rospy
 from std_msgs.msg import Bool
-from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus
 from local_diagnostics.srv import GetNodeLevel, GetNodeLevelRequest
 from threading import Thread
-from mavros_msgs.srv import CommandLong, CommandLongRequest, CommandLongResponse
+from mavros_msgs.srv import CommandLong, CommandLongRequest
 
 # TODO: Add a self.wait_for_topics(topic_list) method.
 
+
 class IfoNode(object):
     """
-    The IfoNode is an abstract node pattern that should be inherited by all 
-    nodes running in the IFO core stack. The purpose of this class is to 
+    The IfoNode is an abstract node pattern that should be inherited by all
+    nodes running in the IFO core stack. The purpose of this class is to
     standardize, and make available, some general-purpose methods to be used
     frequently throughout the code base.
 
     The main example of this is to report diagnostics in a standard way.
-    Currently, I have coded things up such that each node must periodically 
-    publish an array of DiagnosticStatus messages to the topic 
+    Currently, I have coded things up such that each node must periodically
+    publish an array of DiagnosticStatus messages to the topic
 
         'local_diagnostics/in'
 
-    The `local_diagnostics` node subcribes to this topic, aggregates all the 
+    The `local_diagnostics` node subcribes to this topic, aggregates all the
     info from all the other nodes, and provides some services. As such, some key
     inherited methods from this class are:
 
@@ -30,19 +31,20 @@ class IfoNode(object):
         self.get_node_level()
         self.kill_mission()
 
-    Moreover, a `killswitch` has been implemented. Whenever any node reports an 
-    ERROR to the local_diagnostics node, the local_diagnostics publishes a True 
+    Moreover, a `killswitch` has been implemented. Whenever any node reports an
+    ERROR to the local_diagnostics node, the local_diagnostics publishes a True
     value to the `local_diagnostics/killswitch` topic. Through an inherited callback,
     this sets the internal variable `self.killswitch` to true as soon as this occurs.
-    As such, the inheriter can check `self.killswitch` at any time to see if 
+    As such, the inheriter can check `self.killswitch` at any time to see if
     the killswitch has been activated.
 
-    If the user chooses by setting diagnostics_thread = True in the 
+    If the user chooses by setting republish = True in the
     constructor, the latest diagnostic message will be re-published to the
     local_diagnostics node. This can be used as a "heartbeat" to indicate
     the node is alive and running.
     """
-    def __init__(self, diagnostics_thread = False):
+
+    def __init__(self, republish=False, wait = True):
         """
         Constructor
         """
@@ -51,35 +53,41 @@ class IfoNode(object):
         try:
             # Diagnostics publisher.
             self._diagnostics_pub = rospy.Publisher(
-                'local_diagnostics/in', DiagnosticArray, queue_size=10,
-                latch=True
+                "local_diagnostics/in", DiagnosticArray, queue_size=10, latch=True
             )
         except:
-            rospy.logerr('You must initialize the node before calling '\
-                         + 'super().__init__()')
-            raise RuntimeError('You must initialize the node before calling '\
-                         + 'super().__init__()')
+            rospy.logerr(
+                "You must initialize the node before calling " + "super().__init__()"
+            )
+            raise RuntimeError(
+                "You must initialize the node before calling " + "super().__init__()"
+            )
 
         # Wait for services to become available
-        service_timeout = 10
+        service_timeout = 5
         try:
-            rospy.wait_for_service('local_diagnostics/get_node_level', service_timeout)
-            rospy.wait_for_service('mavros/cmd/command', service_timeout)
+            rospy.wait_for_service("local_diagnostics/get_node_level", service_timeout)
+            rospy.wait_for_service("mavros/cmd/command", service_timeout)
         except rospy.ROSException:
-            rospy.logwarn('Some services not online.' \
-                           + 'waiting until available.')
+            if wait:
+                rospy.logwarn("Some services not online. Waiting until available.")
+                rospy.wait_for_service("local_diagnostics/get_node_level")
+                rospy.wait_for_service("mavros/cmd/command", service_timeout)
+            else: 
+                rospy.logwarn("Some services not online.")
 
-            rospy.wait_for_service('local_diagnostics/get_node_level')
-            rospy.wait_for_service('mavros/cmd/command', service_timeout)
-
-        self.get_node_level_srv = rospy.ServiceProxy('local_diagnostics/get_node_level', GetNodeLevel)
-        self.mavros_cmd_srv = rospy.ServiceProxy('mavros/cmd/command', CommandLong)
+        self.get_node_level_srv = rospy.ServiceProxy(
+            "local_diagnostics/get_node_level", GetNodeLevel
+        )
+        self.mavros_cmd_srv = rospy.ServiceProxy("mavros/cmd/command", CommandLong)
 
         # Killswitch subscriber.
-        self.ks_sub = rospy.Subscriber('local_diagnostics/killswitch', Bool, self._cb_killswitch)
+        self.ks_sub = rospy.Subscriber(
+            "local_diagnostics/killswitch", Bool, self._cb_killswitch
+        )
         self.killswitch = False
 
-        if diagnostics_thread:
+        if republish:
             self.last_diag_msg = None
             self._report_thread = Thread(target=self._reporting_thread, args=())
             self._report_thread.daemon = True
@@ -109,9 +117,9 @@ class IfoNode(object):
 
     def kill_mission(self):
         """
-        Immediately kills motors on the drone. 
+        Immediately kills motors on the drone.
 
-        Taken from https://github.com/PX4/PX4-Autopilot/issues/14465 
+        Taken from https://github.com/PX4/PX4-Autopilot/issues/14465
         """
         req = CommandLongRequest()
         req.broadcast = False
@@ -125,8 +133,9 @@ class IfoNode(object):
         req.param7 = 0.0
         self.mavros_cmd_srv(req)
 
-    def report_diagnostics(self, name = None, level = 0, message = '', 
-                           hardware_id ='', values = []):
+    def report_diagnostics(
+        self, name=None, level=0, message="", hardware_id="", values=[]
+    ):
         """
         Send a diagnostic status update to the local_diagnostics node.
         At the minimum, you should specify `level` and `message` arguments.
@@ -160,7 +169,7 @@ class IfoNode(object):
         diag_msg.status[0].hardware_id = hardware_id
         diag_msg.status[0].values = values
         self.last_diag_msg = diag_msg
-        self._diagnostics_pub.publish(diag_msg)    
+        self._diagnostics_pub.publish(diag_msg)
 
         if level == 0:
             rospy.loginfo(message)
@@ -178,17 +187,17 @@ class IfoNode(object):
         request.node_name = node_name
         return self.get_node_level_srv(request)
 
-    def wait_for_nodes(self, node_names, polling_frequency = 1):
+    def wait_for_nodes(self, node_names, polling_frequency=1):
         """
         Waits for a specific node(s) to report a level of 0.
         """
         # TODO: what if the age is very old?
-        rospy.loginfo('Waiting for ' + str(node_names) + ' to be ready.')
+        rospy.loginfo("Waiting for " + str(node_names) + " to be ready.")
         rate = rospy.Rate(polling_frequency)
         nodes_ready = False
-        if type(node_names) == str: 
+        if type(node_names) == str:
             node_names = [node_names]
-        
+
         ns = rospy.get_namespace()
         while not nodes_ready:
             nodes_ready = True
@@ -197,6 +206,5 @@ class IfoNode(object):
                 if response.level != 0 and response.is_valid:
                     nodes_ready = False
             rate.sleep()
-        
-        rospy.loginfo('Node(s) ' + str(node_names) + ' are ready.')        
-    
+
+        rospy.loginfo("Node(s) " + str(node_names) + " are ready.")
