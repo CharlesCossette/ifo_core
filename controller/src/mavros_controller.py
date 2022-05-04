@@ -1,7 +1,13 @@
 #!/usr/bin/env python2
 from ifo_common.utils import retry_if_false
 import rospy
-from mavros_msgs.srv import SetMode, CommandBool, ParamSet, ParamSetRequest, ParamGet
+from mavros_msgs.srv import (
+    SetMode,
+    CommandBool,
+    ParamSet,
+    ParamSetRequest,
+    ParamGet,
+)
 from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State, PositionTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
@@ -62,13 +68,17 @@ class ControllerNode(IfoNode):
         self.state_sub = rospy.Subscriber("mavros/state", State, self.cb_mavros_state)
         self.imu_data_sub = rospy.Subscriber("mavros/imu/data", Imu, self.cb_mavros_imu)
         self.ext_state_data_sub = rospy.Subscriber(
-            "mavros/extended_state", ExtendedState, self.cb_mavros_extended_state
+            "mavros/extended_state",
+            ExtendedState,
+            self.cb_mavros_extended_state,
         )
         self.pose_sub = rospy.Subscriber(
             "mavros/local_position/pose", PoseStamped, self.cb_mavros_pose
         )
         self.velocity_cmd_sub = rospy.Subscriber(
-            "controller/velocity_cmd_in", PositionTarget, self.cb_velocity_cmd_in
+            "controller/velocity_cmd_in",
+            PositionTarget,
+            self.cb_velocity_cmd_in,
         )
         self.takeoff_sub = rospy.Subscriber("controller/takeoff", Bool, self.cb_takeoff)
         self.land_sub = rospy.Subscriber("controller/land", Bool, self.cb_land)
@@ -290,9 +300,9 @@ class ControllerNode(IfoNode):
 
         mode: PX4 mode string
         """
-        
+
         if self.state.mode == mode:
-            return True        
+            return True
         else:
             try:
                 res = self.set_mode_srv(0, mode)  # 0 is custom mode
@@ -324,10 +334,9 @@ class ControllerNode(IfoNode):
                 rospy.logerr(e)
                 return False
 
-
     @retry_if_false(timeout=1, freq=10, log_msg="IFO CORE | set max speed")
     def set_max_xy_speed(self, speed):
-        """ 
+        """
         Sets the maximum horizontal travelling speed of the quadcopter.
         """
         req = ParamSetRequest()
@@ -364,10 +373,12 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.velocity.z = vz
         self.setpoint_msg.yaw_rate = yaw_rate
 
-    def set_position_command(self, px=0, py=0, pz=0, yaw=0):
+    def set_position_command(self, px=0, py=0, pz=0, yaw=None):
         """
         Sets the position command to the internal setpoint_msg variable.
         A seperate thread sends the setpoint_msg to the PX4 controller.
+
+        If yaw is left unspecified, it will be ignored.
         """
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_LOCAL_NED
         self.setpoint_msg.type_mask = (
@@ -379,14 +390,6 @@ class ControllerNode(IfoNode):
             + PositionTarget.IGNORE_AFZ
             + PositionTarget.IGNORE_YAW_RATE
         )
-        if px is None:
-            px = self.pose.pose.position.x
-
-        if py is None:
-            py = self.pose.pose.position.y
-
-        if pz is None:
-            pz = self.pose.pose.position.z
 
         if yaw is None:
             self.setpoint_msg.type_mask += PositionTarget.IGNORE_YAW
@@ -397,7 +400,6 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.position.z = pz
         self.setpoint_msg.yaw = yaw
 
-    
     def wait_for_landed_state(self, timeout):
         loop_freq = 10  # Hz
         rate = rospy.Rate(loop_freq)

@@ -1,5 +1,2 @@
 uint64 time
-float32 x
-float32 y
-float32 z
-float32 yaw
+mavros_msgs/PositionTarget setpoint

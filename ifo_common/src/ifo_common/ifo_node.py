@@ -89,11 +89,11 @@ class IfoNode(object):
 
         if republish:
             self.last_diag_msg = None
-            self._report_thread = Thread(target=self._reporting_thread, args=())
-            self._report_thread.daemon = True
-            self._report_thread.start()
+            self._heartbeat = Thread(target=self._heartbeat_thread, args=())
+            self._heartbeat.daemon = True
+            self._heartbeat.start()
 
-    def _reporting_thread(self):
+    def _heartbeat_thread(self):
         """
         Thread used for periodic re-publishing at 1 Hz.
         """
