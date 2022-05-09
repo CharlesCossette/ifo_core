@@ -9,7 +9,6 @@ project(ifo_bringup)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   controller
-  fsm
   local_diagnostics
 )
 

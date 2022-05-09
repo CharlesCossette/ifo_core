@@ -50,13 +50,10 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>controller</build_depend>
-  <build_depend>fsm</build_depend>
   <build_depend>local_diagnostics</build_depend>
   <build_export_depend>controller</build_export_depend>
-  <build_export_depend>fsm</build_export_depend>
   <build_export_depend>local_diagnostics</build_export_depend>
   <exec_depend>controller</exec_depend>
-  <exec_depend>fsm</exec_depend>
   <exec_depend>local_diagnostics</exec_depend>
 
 
