@@ -103,7 +103,7 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.start()
 
         rospy.sleep(15)
-        self.set_max_xy_speed(0.2)
+        self.set_max_xy_speed(0.5) #TODO: real param.
         self.report_diagnostics(level=0, message="Ready. Idle.")
 
     def cb_mavros_pose(self, pose_msg):

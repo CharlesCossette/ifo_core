@@ -179,6 +179,7 @@ class MocapForwarderNode(IfoNode):
             if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
                 # Report error to local diagnostics node.
                 # This should fire a killswitch
+                # TODO: shouldnt we attempt a landing??
                 self.report_diagnostics(
                     level=2, message="ERROR. Interruption in mocap data!"
                 )
@@ -186,6 +187,7 @@ class MocapForwarderNode(IfoNode):
                 break
 
             # TODO: check change of last message.
+            # TODO: check if 0.0 position
             else:
                 self.pose_pub.publish(self.pose)
 
