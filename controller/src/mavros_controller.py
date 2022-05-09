@@ -7,7 +7,9 @@ from mavros_msgs.srv import (
     ParamSet,
     ParamSetRequest,
     ParamGet,
+    MessageInterval,
 )
+
 from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State, PositionTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
@@ -15,8 +17,12 @@ from std_msgs.msg import Header, Bool
 from threading import Thread
 from ifo_common.ifo_node import IfoNode
 from tf.transformations import euler_from_quaternion
-import numpy as np
 
+# Mavlink message IDs
+HIGHRES_IMU = 105
+DISTANCE_SENSOR = 132
+ATTITUDE = 30
+ATTITUDE_QUATERNION = 31
 
 class ControllerNode(IfoNode):
     """
@@ -53,6 +59,7 @@ class ControllerNode(IfoNode):
             rospy.wait_for_service("mavros/cmd/arming", service_timeout)
             rospy.wait_for_service("mavros/param/set", service_timeout)
             rospy.wait_for_service("mavros/param/get", service_timeout)
+            rospy.wait_for_service("mavros/set_message_interval", service_timeout)
             self._services_online = True
         except rospy.ROSException:
             rospy.logwarn("IFO CORE: Controller required services not online.")
@@ -63,6 +70,7 @@ class ControllerNode(IfoNode):
         self.set_arming_srv = rospy.ServiceProxy("mavros/cmd/arming", CommandBool)
         self.set_param_srv = rospy.ServiceProxy("mavros/param/set", ParamSet)
         self.get_param_srv = rospy.ServiceProxy("mavros/param/get", ParamGet)
+        self.set_rate_srv = rospy.ServiceProxy("mavros/set_message_interval", MessageInterval)
 
         # Subscribers
         self.state_sub = rospy.Subscriber("mavros/state", State, self.cb_mavros_state)
@@ -87,6 +95,13 @@ class ControllerNode(IfoNode):
         self.setpoint_pub = rospy.Publisher(
             "mavros/setpoint_raw/local", PositionTarget, queue_size=1
         )
+
+        # Set sensor/mavlink messaging rates
+        self.set_rate(HIGHRES_IMU, 200)
+        self.set_rate(DISTANCE_SENSOR, 30)
+        self.set_rate(ATTITUDE, 30) # Reduced to free bandwidth
+        self.set_rate(ATTITUDE_QUATERNION, 30) # Reduced to free bandwidth
+
 
         self.setpoint_msg = PositionTarget()
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
@@ -314,6 +329,24 @@ class ControllerNode(IfoNode):
             except rospy.ServiceException as e:
                 rospy.logerr(e)
                 return False
+
+    @retry_if_false(timeout=3, freq=1, log_msg="IFO CORE | set rate")
+    def set_rate(self, message_id, rate):
+        """
+        Sets the FCU flight mode.
+
+        mode: PX4 mode string
+        """
+        
+        try:
+            res = self.set_rate_srv(message_id, rate)  # 0 is custom mode
+            if res.success:
+                return True
+            else:
+                return False
+        except rospy.ServiceException as e:
+            rospy.logerr(e)
+            return False
 
     @retry_if_false(timeout=5, freq=1, log_msg="IFO CORE | set arm")
     def set_arm(self, arm, timeout):
