@@ -21,8 +21,7 @@ in real time.
 # TODO. Handle sporadic gaps in mocap data. Kill immediately.
 class MocapForwarderNode(IfoNode):
     def __init__(self):
-        rospy.init_node("mocap_forwarder")
-        super(MocapForwarderNode, self).__init__(republish=True)
+        super(MocapForwarderNode, self).__init__("mocap_forwarder", republish=True)
 
         self.report_diagnostics(level=1, message="Initializing...")
 
@@ -45,17 +44,8 @@ class MocapForwarderNode(IfoNode):
         self.set_param_srv = rospy.ServiceProxy("mavros/param/set", ParamSet)
         self.get_param_srv = rospy.ServiceProxy("mavros/param/get", ParamGet)
         self.orig_params = {}
-        # Currently vrpn_client_node is run locally on each agent. Should we do this?
-        # or have a one node running on a laptop? We would need to understand
-        # vrpn clients for this. But afaik, if you have your laptop be the single
-        # vrpn client publishing the mocap data on ROS topics, and then the drones
-        # subscribe to those topics, then all the data needs to be routed through ZTO.
-        # On the other hand, if vrpn_client_node runs on each agent, then each
-        # agent gets all the mocap data directly from the router, skipping ZTO,
-        # at the cost of much duplication of topics and possibly clogging ros
-        # (but not even... still so much less info than a camera).
-        #
-        # To me, agents each locally running a vrpn client seems logical.
+
+        # We require that a vrpn_client_node be running locally on each agent.
         self.pose_sub = rospy.Subscriber(
             "vrpn_client_node" + who_am_i + "pose", PoseStamped, self.cb_mocap_pose
         )
@@ -63,10 +53,21 @@ class MocapForwarderNode(IfoNode):
             "mavros/vision_pose/pose", PoseStamped, queue_size=1
         )
         self.pose = None
+        self.last_pose = None
         # Give PX4 some time to be properly initialized before starting.
         rospy.sleep(15)
 
     def cb_mocap_pose(self, pose_msg):
+        # validate the message
+        msg_valid = True
+        if (
+            pose_msg.pose.position.x == 0.0
+            or pose_msg.pose.position.y == 0.0
+            or pose_msg.pose.position.z == 0.0
+        ):
+            msg_valid = False
+
+        self.last_pose = self.pose
         self.pose = pose_msg
         self.last_rx_stamp = rospy.get_time()
 
@@ -131,7 +132,7 @@ class MocapForwarderNode(IfoNode):
         """
         loop_freq = 2  # Hz
         rate = rospy.Rate(loop_freq)
-        for i in xrange(timeout * loop_freq):
+        for i in range(timeout * loop_freq):
             resp = self.get_param_srv(param_id)
             if resp.success:
                 break
@@ -174,16 +175,14 @@ class MocapForwarderNode(IfoNode):
         self.wait_for_first_message()
         self.report_diagnostics(level=0, message="Normal. Forwarding mocap data.")
         loop_freq = 40
-        rate = rospy.Rate(40)
+        rate = rospy.Rate(loop_freq)
         while not rospy.is_shutdown():
+
             if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
-                # Report error to local diagnostics node.
-                # This should fire a killswitch
-                # TODO: shouldnt we attempt a landing??
                 self.report_diagnostics(
                     level=2, message="ERROR. Interruption in mocap data!"
                 )
-                self.kill_mission()
+                self.emergency_land()
                 break
 
             # TODO: check change of last message.
@@ -201,8 +200,6 @@ class MocapForwarderNode(IfoNode):
         Gets executed on shutdown. Resets the PX4 parameters that were set by
         this node.
         """
-        # How do we know this will actually execute before PX4 is shut down?
-        # Resets all the parameters
         for key, value in self.orig_params.items():
             self.set_parameter(key, value)
 

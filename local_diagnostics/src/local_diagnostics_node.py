@@ -95,14 +95,6 @@ class LocalDiagnosticsNode(object):
         in the current self.node_summary dictionary.
         """
         for diag_status in diag_msg.status:
-
-            # KILL MISSION. Send message to all nodes.
-            # TODO. Needs to be implemented on node side.
-            if diag_status.level == 4:
-                killswitch_msg = Bool()
-                killswitch_msg.data = True
-                self.killswitch_pub(killswitch_msg)
-
             self.node_summary[diag_status.name] = {
                 "last_updated": diag_msg.header.stamp.to_sec(),
                 "name": diag_status.name,
@@ -112,7 +104,6 @@ class LocalDiagnosticsNode(object):
                 "values": diag_status.values,
                 "age": round(rospy.get_time() - diag_msg.header.stamp.to_sec(), 1),
             }
-        # print_dictionary(self.node_summary)
 
     def get_node_level(self, request):
         """
@@ -151,7 +142,7 @@ class LocalDiagnosticsNode(object):
         """
         Periodically publishes the node summary.
         """
-        rate = rospy.Rate(0.5)
+        rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             if len(self.node_summary) > 0:
                 self.print_summary()

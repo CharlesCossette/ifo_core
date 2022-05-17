@@ -8,6 +8,7 @@ from geometry_msgs.msg import (
 import numpy as np
 import rospy
 
+
 class DictObj:
     """
     Converts a potentially nested dictionary into an object with properties.
@@ -82,19 +83,29 @@ def pose_msg_to_matrix(pose):
     else:
         raise TypeError()
 
+
 def parametrized(dec):
     def layer(*args, **kwargs):
         def repl(f):
             return dec(f, *args, **kwargs)
+
         return repl
+
     return layer
 
+
 @parametrized
-def retry_if_false(func, timeout = 1, freq = 1, log_msg = ""):
+def retry_if_false(func, timeout=1, freq=1, log_msg=""):
     """
     Decorator which will make the function re-execute if it returns a False.
+    Will add `timeout` and `freq` to kwargs.
     """
+    default_timeout = timeout
+    default_freq = freq
+
     def wrapper(*args, **kwargs):
+        timeout = kwargs.pop("timeout", default_timeout)
+        freq = kwargs.pop("freq", default_freq)
         rate = rospy.Rate(freq)
         N = timeout * freq
         success = False
@@ -105,9 +116,12 @@ def retry_if_false(func, timeout = 1, freq = 1, log_msg = ""):
                 rospy.logerr(e)
             success_string = "success" if success else "fail"
 
-            rospy.loginfo(log_msg + ": attempt {0} of {1} = ".format(i, N) + str(success_string))
+            rospy.loginfo(
+                log_msg + ": attempt {0} of {1} = ".format(i, N) + str(success_string)
+            )
             if success == True:
                 break
             rate.sleep()
-        return success 
+        return success
+
     return wrapper

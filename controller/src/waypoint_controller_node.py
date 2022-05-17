@@ -52,7 +52,12 @@ class WaypointController(ControllerNode):
             self.report_diagnostics(
                 level=0,
                 message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
-                    current_wp_idx, wp.time, sp.position.x, sp.position.y, sp.position.z, sp.yaw
+                    current_wp_idx,
+                    wp.time,
+                    sp.position.x,
+                    sp.position.y,
+                    sp.position.z,
+                    sp.yaw,
                 ),
             )
 
@@ -68,7 +73,12 @@ class WaypointController(ControllerNode):
             self.report_diagnostics(
                 level=0,
                 message="Holding until WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
-                    current_wp_idx, wp.time, sp.position.x, sp.position.y, sp.position.z, sp.yaw
+                    current_wp_idx,
+                    wp.time,
+                    sp.position.x,
+                    sp.position.y,
+                    sp.position.z,
+                    sp.yaw,
                 ),
             )
 
@@ -82,7 +92,12 @@ class WaypointController(ControllerNode):
             self.report_diagnostics(
                 level=0,
                 message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
-                    current_wp_idx, wp.time, sp.position.x, sp.position.y, sp.position.z, sp.yaw
+                    current_wp_idx,
+                    wp.time,
+                    sp.position.x,
+                    sp.position.y,
+                    sp.position.z,
+                    sp.yaw,
                 ),
             )
             self.reach_waypoint(wp, timeout=10)
@@ -110,18 +125,18 @@ class WaypointController(ControllerNode):
 
         self.setpoint_msg = wp
 
-
         # Continuously monitor distance to waypoint.
         d = starting_d
         loop_freq = 10
         rate = rospy.Rate(loop_freq)
+        success = False
         for i in range(timeout * loop_freq):
             if rospy.is_shutdown():
                 break
             if d < reach_threshold:
                 rospy.loginfo("Successfully reached waypoint.")
+                success = True
                 break
-
 
             # Check to make sure we are closer than before. If something is wrong
             # and we are going in the complete wrong direction, emergency stop.
@@ -130,10 +145,12 @@ class WaypointController(ControllerNode):
             d = np.linalg.norm(wp_pos - my_pos)
             if d > starting_d + 1.5:
                 self.report_diagnostics(level=2, message="ERROR: Failing to reach WP")
-                self.kill_mission()
+                rospy.loginfo("Starting d: {0} current d: {1}".format(starting_d, d))
+                self.kill_motors()
                 break
-            
+
             rate.sleep()
+        return success
 
 
 if __name__ == "__main__":

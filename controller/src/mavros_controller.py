@@ -10,7 +10,6 @@ from mavros_msgs.srv import (
     MessageInterval,
 )
 
-from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State, PositionTarget, ExtendedState
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header, Bool
@@ -23,6 +22,7 @@ HIGHRES_IMU = 105
 DISTANCE_SENSOR = 132
 ATTITUDE = 30
 ATTITUDE_QUATERNION = 31
+
 
 class ControllerNode(IfoNode):
     """
@@ -42,21 +42,19 @@ class ControllerNode(IfoNode):
     """
 
     def __init__(self):
-        rospy.init_node("controller")
-        super(ControllerNode, self).__init__(republish=True)
+        super(ControllerNode, self).__init__("controller", republish=True)
 
         self.thread_ready = False
         self.kill_thread = False
         self.ready_topics = {
-            key: False for key in ["state", "imu", "pose", "extended_state"]
+            key: False for key in ["pose"]
         }
         self.report_diagnostics(level=1, message="Initializing.")
 
+        # ----------------------------- Services ------------------------------#
         # Wait for services to become available
         service_timeout = 20
         try:
-            rospy.wait_for_service("mavros/set_mode", service_timeout)
-            rospy.wait_for_service("mavros/cmd/arming", service_timeout)
             rospy.wait_for_service("mavros/param/set", service_timeout)
             rospy.wait_for_service("mavros/param/get", service_timeout)
             rospy.wait_for_service("mavros/set_message_interval", service_timeout)
@@ -66,20 +64,13 @@ class ControllerNode(IfoNode):
             self._services_online = False
 
         # Create service proxies
-        self.set_mode_srv = rospy.ServiceProxy("mavros/set_mode", SetMode)
-        self.set_arming_srv = rospy.ServiceProxy("mavros/cmd/arming", CommandBool)
         self.set_param_srv = rospy.ServiceProxy("mavros/param/set", ParamSet)
         self.get_param_srv = rospy.ServiceProxy("mavros/param/get", ParamGet)
-        self.set_rate_srv = rospy.ServiceProxy("mavros/set_message_interval", MessageInterval)
-
-        # Subscribers
-        self.state_sub = rospy.Subscriber("mavros/state", State, self.cb_mavros_state)
-        self.imu_data_sub = rospy.Subscriber("mavros/imu/data", Imu, self.cb_mavros_imu)
-        self.ext_state_data_sub = rospy.Subscriber(
-            "mavros/extended_state",
-            ExtendedState,
-            self.cb_mavros_extended_state,
+        self.set_rate_srv = rospy.ServiceProxy(
+            "mavros/set_message_interval", MessageInterval
         )
+
+        # --------------------------- Subscribers -----------------------------#
         self.pose_sub = rospy.Subscriber(
             "mavros/local_position/pose", PoseStamped, self.cb_mavros_pose
         )
@@ -91,24 +82,21 @@ class ControllerNode(IfoNode):
         self.takeoff_sub = rospy.Subscriber("controller/takeoff", Bool, self.cb_takeoff)
         self.land_sub = rospy.Subscriber("controller/land", Bool, self.cb_land)
 
-        # Publishers
+        # ---------------------------- Publishers -----------------------------#
         self.setpoint_pub = rospy.Publisher(
             "mavros/setpoint_raw/local", PositionTarget, queue_size=1
         )
-
+        # ---------------------------------------------------------------------#
         # Set sensor/mavlink messaging rates
         self.set_rate(HIGHRES_IMU, 200)
         self.set_rate(DISTANCE_SENSOR, 30)
-        self.set_rate(ATTITUDE, 30) # Reduced to free bandwidth
-        self.set_rate(ATTITUDE_QUATERNION, 30) # Reduced to free bandwidth
+        self.set_rate(ATTITUDE, 30)  # Reduced to free bandwidth
+        self.set_rate(ATTITUDE_QUATERNION, 30)  # Reduced to free bandwidth
 
-
+        # 
         self.setpoint_msg = PositionTarget()
-        self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
         self.set_position_command(0, 0, 0, 0)
-        self.state = State()
         self.pose = PoseStamped()
-        self.extended_state = ExtendedState()
 
         # Send setpoints in seperate thread to better prevent failsafe.
         # If PX4 does not receive a constant stream of setpoints, it will
@@ -118,23 +106,12 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.start()
 
         rospy.sleep(15)
-        self.set_max_xy_speed(0.5) #TODO: real param.
+        self.set_max_xy_speed(0.5)  # TODO: real param.
         self.report_diagnostics(level=0, message="Ready. Idle.")
 
     def cb_mavros_pose(self, pose_msg):
         self.pose = pose_msg
         self.ready_topics["pose"] = True
-
-    def cb_mavros_state(self, state_msg):
-        self.state = state_msg
-        self.ready_topics["state"] = True
-
-    def cb_mavros_extended_state(self, extended_state_msg):
-        self.extended_state = extended_state_msg
-        self.ready_topics["extended_state"] = True
-
-    def cb_mavros_imu(self, imu_msg):
-        self.ready_topics["imu"] = True
 
     def cb_takeoff(self, msg):
         self.takeoff()
@@ -203,14 +180,22 @@ class ControllerNode(IfoNode):
 
         Simple proportional control is used.
         """
+        rospy.loginfo("Commanding takeoff.")
         preflight_success = self.preflight_check()
-        mode_success = self.set_mode("OFFBOARD", 3)
-        arm_success = self.set_arm(True, 3)
+        if not preflight_success:
+            return False
+        
+        mode_success = self.set_mode("OFFBOARD", timeout = 3)
+        if not mode_success:
+            return False 
 
-        altitude_reached = False
-        threshold = (
-            0.2  # considered reached when within threshold meters of target altitude
-        )
+        arm_success = self.set_arm(True)
+        if not arm_success:
+            return False
+
+        # considered reached when within threshold meters of target altitude
+        threshold = 0.2  
+
         loop_freq = 50  # Hz
         rate = rospy.Rate(loop_freq)
         takeoff_successful = False
@@ -288,47 +273,25 @@ class ControllerNode(IfoNode):
         Lands the quadcopter where it is.
         """
         self.set_velocity_command(vz=-0.6)  # Send downwards velocity command.
-        self.set_mode("AUTO.LAND", 5)  # Simulanteously activate automatic landing.
+        self.set_mode("AUTO.LAND", timeout = 5)  # Simulanteously activate automatic landing.
         self.report_diagnostics(level=0, message="Normal. Landing.")
-        is_landed = self.wait_for_landed_state(10)  # This is failing often.
+        is_landed = self.wait_for_landed_state(timeout=10)  # This is failing often.
         if is_landed:
-            self.set_arm(False, 5)  # Landed state required for disarming.
+            self.set_arm(False)  # Landed state required for disarming.
         else:
             rospy.logwarn(
                 "Automatic landing failed. Sending downwards velocity command."
             )
             self.report_diagnostics(level=1, message="Landing issue.")
             self.set_velocity_command(vz=-1.5)
-            is_landed = self.wait_for_landed_state(3)
+            is_landed = self.wait_for_landed_state(timeout=3)
             if is_landed:
-                self.set_arm(False, 5)
+                self.set_arm(False)
             else:
                 rospy.logwarn("Landing state still not detected. Killing.")
                 self.report_diagnostics(level=2, message="Landing failed. Killing")
                 self.killswitch = True
-                self.kill_mission()
-
-    @retry_if_false(timeout=3, freq=1, log_msg="IFO CORE | set mode")
-    def set_mode(self, mode, timeout):
-        """
-        Sets the FCU flight mode.
-
-        mode: PX4 mode string
-        """
-
-        if self.state.mode == mode:
-            return True
-        else:
-            try:
-                res = self.set_mode_srv(0, mode)  # 0 is custom mode
-                if not res.mode_sent:
-                    rospy.logerr("IFO_CORE: failed to send mode command.")
-                    return False
-                else:
-                    return True
-            except rospy.ServiceException as e:
-                rospy.logerr(e)
-                return False
+                self.kill_motors()
 
     @retry_if_false(timeout=3, freq=1, log_msg="IFO CORE | set rate")
     def set_rate(self, message_id, rate):
@@ -337,7 +300,7 @@ class ControllerNode(IfoNode):
 
         mode: PX4 mode string
         """
-        
+
         try:
             res = self.set_rate_srv(message_id, rate)  # 0 is custom mode
             if res.success:
@@ -347,25 +310,6 @@ class ControllerNode(IfoNode):
         except rospy.ServiceException as e:
             rospy.logerr(e)
             return False
-
-    @retry_if_false(timeout=5, freq=1, log_msg="IFO CORE | set arm")
-    def set_arm(self, arm, timeout):
-        """
-        Sets the arming mode of the FCU.
-        arm: True to arm or False to disarm
-        """
-        if self.state.armed == arm:
-            return True
-        else:
-            try:
-                res = self.set_arming_srv(arm)
-                if res.success:
-                    return True
-                else:
-                    return False
-            except rospy.ServiceException as e:
-                rospy.logerr(e)
-                return False
 
     @retry_if_false(timeout=1, freq=10, log_msg="IFO CORE | set max speed")
     def set_max_xy_speed(self, speed):
@@ -432,23 +376,6 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.position.y = py
         self.setpoint_msg.position.z = pz
         self.setpoint_msg.yaw = yaw
-
-    def wait_for_landed_state(self, timeout):
-        loop_freq = 10  # Hz
-        rate = rospy.Rate(loop_freq)
-        landed_state_confirmed = False
-        for i in range(timeout * loop_freq):
-            if self.extended_state.landed_state == 1:  # 1 for landed, 0 for not landed
-                landed_state_confirmed = True
-                rospy.loginfo(
-                    "IFO_CORE: landed state confirmed | seconds: {0} of {1}".format(
-                        i / loop_freq, timeout
-                    )
-                )
-                break
-
-            rate.sleep()
-        return landed_state_confirmed
 
     def cb_position_cmd_in(self, position_cmd_msg):
         pass
