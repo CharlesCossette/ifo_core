@@ -46,9 +46,7 @@ class ControllerNode(IfoNode):
 
         self.thread_ready = False
         self.kill_thread = False
-        self.ready_topics = {
-            key: False for key in ["pose"]
-        }
+        self.ready_topics = {key: False for key in ["pose"]}
         self.report_diagnostics(level=1, message="Initializing.")
 
         # ----------------------------- Services ------------------------------#
@@ -93,7 +91,7 @@ class ControllerNode(IfoNode):
         self.set_rate(ATTITUDE, 30)  # Reduced to free bandwidth
         self.set_rate(ATTITUDE_QUATERNION, 30)  # Reduced to free bandwidth
 
-        # 
+        #
         self.setpoint_msg = PositionTarget()
         self.set_position_command(0, 0, 0, 0)
         self.pose = PoseStamped()
@@ -184,17 +182,17 @@ class ControllerNode(IfoNode):
         preflight_success = self.preflight_check()
         if not preflight_success:
             return False
-        
-        mode_success = self.set_mode("OFFBOARD", timeout = 3)
+
+        mode_success = self.set_mode("OFFBOARD", timeout=3)
         if not mode_success:
-            return False 
+            return False
 
         arm_success = self.set_arm(True)
         if not arm_success:
             return False
 
         # considered reached when within threshold meters of target altitude
-        threshold = 0.2  
+        threshold = 0.2
 
         loop_freq = 50  # Hz
         rate = rospy.Rate(loop_freq)
@@ -273,7 +271,9 @@ class ControllerNode(IfoNode):
         Lands the quadcopter where it is.
         """
         self.set_velocity_command(vz=-0.6)  # Send downwards velocity command.
-        self.set_mode("AUTO.LAND", timeout = 5)  # Simulanteously activate automatic landing.
+        self.set_mode(
+            "AUTO.LAND", timeout=5
+        )  # Simulanteously activate automatic landing.
         self.report_diagnostics(level=0, message="Normal. Landing.")
         is_landed = self.wait_for_landed_state(timeout=10)  # This is failing often.
         if is_landed:

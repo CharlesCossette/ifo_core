@@ -67,9 +67,10 @@ class MocapForwarderNode(IfoNode):
         ):
             msg_valid = False
 
-        self.last_pose = self.pose
-        self.pose = pose_msg
-        self.last_rx_stamp = rospy.get_time()
+        if msg_valid:
+            self.last_pose = self.pose
+            self.pose = pose_msg
+            self.last_rx_stamp = rospy.get_time()
 
     def set_parameter(self, param_id, value, timeout=10):
         """
@@ -160,7 +161,7 @@ class MocapForwarderNode(IfoNode):
 
     def start(self):
 
-        max_mocap_delay = 0.5  # Seconds. If havnt recieved a new mocap measurement
+        max_mocap_delay = 1  # Seconds. If havnt recieved a new mocap measurement
         # for this duration, we will kill mission.
 
         # Set the right PX4 parameters for when using mocap
@@ -176,17 +177,16 @@ class MocapForwarderNode(IfoNode):
         self.report_diagnostics(level=0, message="Normal. Forwarding mocap data.")
         loop_freq = 40
         rate = rospy.Rate(loop_freq)
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self.killswitch:
 
             if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
                 self.report_diagnostics(
                     level=2, message="ERROR. Interruption in mocap data!"
                 )
                 self.emergency_land()
-                break
+                self.killswitch = True # Stop publishing
 
             # TODO: check change of last message.
-            # TODO: check if 0.0 position
             else:
                 self.pose_pub.publish(self.pose)
 
@@ -208,4 +208,5 @@ if __name__ == "__main__":
     node = MocapForwarderNode()
     rospy.on_shutdown(node.shutdown)
     node.start()
-    rospy.spin()  # Should only get here on shutdown
+
+    # TODO: need method of re-entering when retrying
