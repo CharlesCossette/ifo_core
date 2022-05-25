@@ -86,7 +86,7 @@ class ControllerNode(IfoNode):
         )
         # ---------------------------------------------------------------------#
         # Set sensor/mavlink messaging rates
-        self.set_rate(HIGHRES_IMU, 200)
+        self.set_rate(HIGHRES_IMU, 150)
         self.set_rate(DISTANCE_SENSOR, 30)
         self.set_rate(ATTITUDE, 30)  # Reduced to free bandwidth
         self.set_rate(ATTITUDE_QUATERNION, 30)  # Reduced to free bandwidth
