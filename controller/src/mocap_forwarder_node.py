@@ -177,18 +177,22 @@ class MocapForwarderNode(IfoNode):
         self.report_diagnostics(level=0, message="Normal. Forwarding mocap data.")
         loop_freq = 40
         rate = rospy.Rate(loop_freq)
-        while not rospy.is_shutdown() and not self.killswitch:
+        lost_mocap = False
+        while not rospy.is_shutdown():
 
             if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
                 self.report_diagnostics(
                     level=2, message="ERROR. Interruption in mocap data!"
                 )
                 self.emergency_land()
-                self.killswitch = True # Stop publishing
+                lost_mocap = True
 
             # TODO: check change of last message.
             else:
                 self.pose_pub.publish(self.pose)
+                if lost_mocap:
+                    self.report_diagnostics(level=0, message="Recovered. Forwarding mocap data.")
+                    lost_mocap = False
 
             try:  # prevent garbage in console output when thread is killed
                 rate.sleep()
