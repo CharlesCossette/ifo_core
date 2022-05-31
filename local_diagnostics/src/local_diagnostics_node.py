@@ -145,7 +145,7 @@ class LocalDiagnosticsNode(object):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             if len(self.node_summary) > 0:
-                self.print_summary()
+                #self.print_summary()
 
                 # Convert to proper NodeSummary message
                 summary_list = []

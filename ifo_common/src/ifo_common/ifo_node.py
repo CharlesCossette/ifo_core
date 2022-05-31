@@ -125,11 +125,9 @@ class IfoNode(object):
 
     def _cb_mavros_state(self, state_msg):
         self.state = state_msg
-        # self.ready_topics["state"] = True
 
     def _cb_mavros_extended_state(self, extended_state_msg):
         self.extended_state = extended_state_msg
-        # self.ready_topics["extended_state"] = True
 
     def _cb_killswitch(self, killswitch_msg):
         """
@@ -157,7 +155,7 @@ class IfoNode(object):
         req.param7 = 0.0
         self.mavros_cmd_srv(req)
 
-    @retry_if_false(timeout=3, freq=1, log_msg="IFO CORE | set mode")
+    @retry_if_false(timeout=3, freq=2, log_msg="IFO CORE | set mode")
     def set_mode(self, mode):
         """
         Sets the FCU flight mode.
@@ -207,16 +205,16 @@ class IfoNode(object):
 
         return landed_state_confirmed
 
-    def emergency_land(self):
+    def emergency_land(self, timeout=5):
         """
         Lands the quadcopter where it is.
         """
         self.report_diagnostics(level=1, message="Emergency landing.")
-        success = self.set_mode("AUTO.LAND", timeout=5)  # Activate automatic landing.
+        success = self.set_mode("AUTO.LAND", timeout=1)  # Activate automatic landing.
         landing_success = False
         self.killswitch = True
         if success:
-            is_landed = self.wait_for_landed_state(timeout=5)
+            is_landed = self.wait_for_landed_state(timeout=timeout)
             if is_landed:
                 self.report_diagnostics(level=0, message="Landing confirmed.")
                 self.set_arm(False)  # Landed state required for disarming.
@@ -229,7 +227,7 @@ class IfoNode(object):
             self.kill_motors()
 
     def report_diagnostics(
-        self, name=None, level=0, message="", hardware_id="", values=[]
+        self, level=0, message="", hardware_id="", values=[], name=None
     ):
         """
         Send a diagnostic status update to the local_diagnostics node.
@@ -237,8 +235,6 @@ class IfoNode(object):
 
         PARAMETERS:
         -----------
-        name: string
-            node name. leave blank to automatically read name.
         level: int
             0 = OK
             1 = WARN
@@ -251,6 +247,8 @@ class IfoNode(object):
             usually unused, can specify ID if needed
         values: dict
             any other key-value information to send.
+        name: string
+            node name. leave blank to automatically read name.
         """
         if name is None:
             name = rospy.get_name()

@@ -9,7 +9,7 @@ class WaypointController(ControllerNode):
     def __init__(self):
         super(WaypointController, self).__init__()
         self.waypoints_sub = rospy.Subscriber(
-            "controller/waypoints_in", WaypointList, self.cb_waypoints_in
+            "controller/waypoints_in", WaypointList, self.cb_waypoints_in, queue_size=1
         )
 
     def cb_waypoints_in(self, waypoints_msg):
@@ -51,7 +51,7 @@ class WaypointController(ControllerNode):
             sp = wp.setpoint
             self.report_diagnostics(
                 level=0,
-                message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
+                message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw: {5}".format(
                     current_wp_idx,
                     wp.time,
                     sp.position.x,
@@ -72,7 +72,7 @@ class WaypointController(ControllerNode):
             sp = wp.setpoint
             self.report_diagnostics(
                 level=0,
-                message="Holding until WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
+                message="Holding until WP #{0} time: {1} x: {2} y:{3} z:{4} yaw: {5}".format(
                     current_wp_idx,
                     wp.time,
                     sp.position.x,
@@ -91,7 +91,7 @@ class WaypointController(ControllerNode):
 
             self.report_diagnostics(
                 level=0,
-                message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw{5}".format(
+                message="Reaching WP #{0} time: {1} x: {2} y:{3} z:{4} yaw: {5}".format(
                     current_wp_idx,
                     wp.time,
                     sp.position.x,
@@ -100,7 +100,10 @@ class WaypointController(ControllerNode):
                     sp.yaw,
                 ),
             )
-            self.reach_waypoint(wp, timeout=10)
+            success = self.reach_waypoint(wp, timeout=10)
+            if not success:
+                self.report_diagnostics(level=1, message="Failed to reach waypoint. Aborting mission.")
+                break
 
             current_wp_idx = current_wp_idx + 1
 
@@ -109,14 +112,14 @@ class WaypointController(ControllerNode):
         self.land()
         self.report_diagnostics(level=0, message="Normal. Idle.")
 
-    def reach_waypoint(self, waypoint, timeout):
+    def reach_waypoint(self, waypoint, timeout, reach_threshold = 0.5):
         """
         Reaches a single Waypoint and confirms with state estimate feedback.
 
         Will trigger a failsafe if the distance to waypoint is greater than 1.5
         meters from the initial distance.
         """
-        reach_threshold = 0.5  # distance in meters
+         # distance in meters
         wp = waypoint.setpoint
         wp_pos = np.array([wp.position.x, wp.position.y, wp.position.z])
         pos = self.pose.pose.position
