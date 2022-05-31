@@ -47,7 +47,7 @@ class ControllerNode(IfoNode):
         self.thread_ready = False
         self.kill_thread = False
         self.ready_topics = {key: False for key in ["pose"]}
-        self.report_diagnostics(level=1, message="Initializing.")
+        self.report_diagnostics(level=1, message="Initializing...")
 
         # ----------------------------- Services ------------------------------#
         # Wait for services to become available
@@ -86,10 +86,10 @@ class ControllerNode(IfoNode):
         )
         # ---------------------------------------------------------------------#
         # Set sensor/mavlink messaging rates
-        self.set_rate(HIGHRES_IMU, 150)
-        self.set_rate(DISTANCE_SENSOR, 30)
-        self.set_rate(ATTITUDE, 30)  # Reduced to free bandwidth
-        self.set_rate(ATTITUDE_QUATERNION, 30)  # Reduced to free bandwidth
+        self.set_rate(HIGHRES_IMU, 250)
+        self.set_rate(DISTANCE_SENSOR, 10)
+        self.set_rate(ATTITUDE, 10)  # Reduced to free bandwidth
+        self.set_rate(ATTITUDE_QUATERNION, 10)  # Reduced to free bandwidth
 
         #
         self.setpoint_msg = PositionTarget()
@@ -103,6 +103,7 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.daemon = True
         self.setpoint_thread.start()
 
+        rospy.on_shutdown(self._mavros_shutdown_hook)
         rospy.sleep(15)
         self.set_max_xy_speed(0.5)  # TODO: real param.
         self.report_diagnostics(level=0, message="Ready. Idle.")
@@ -397,3 +398,8 @@ class ControllerNode(IfoNode):
             velocity_cmd_msg.velocity.z,
             velocity_cmd_msg.yaw_rate,
         )
+
+    def _mavros_shutdown_hook(self):
+        self.set_rate(HIGHRES_IMU, 50) # Return to original rate.. 
+        self.emergency_land(timeout = 3)
+
