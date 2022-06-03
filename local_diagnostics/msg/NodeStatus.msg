@@ -8,6 +8,6 @@ byte level # level of operation enumerated above
 string name # a description of the test/component reporting
 string message # a description of the status
 string id # a hardware unique string
-float32 last_updated
+float64 last_updated
 float32 age
 diagnostic_msgs/KeyValue[] values # an array of values associated with the status
