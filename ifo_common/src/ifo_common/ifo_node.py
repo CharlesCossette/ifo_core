@@ -17,7 +17,7 @@ from .utils import retry_if_false
 
 class IfoNode(object):
     """
-    The IfoNode is an abstract node pattern that should be inherited by all
+    The IfoNode is the base class that should be inherited by all
     nodes running in the IFO core stack. The purpose of this class is to
     standardize, and make available, some general-purpose methods to be used
     frequently throughout the code base.
