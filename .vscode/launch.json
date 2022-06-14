@@ -11,7 +11,7 @@
         {
             "name": "ROS: IFO Controller Debug",
             "request": "launch",
-            "target": "${workspaceFolder}/controller/launch/controller_node.launch",
+            "target": "${workspaceFolder}/controller/launch/controller.launch",
             "type": "ros"
         }
     ]
