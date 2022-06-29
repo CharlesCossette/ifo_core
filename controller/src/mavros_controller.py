@@ -27,7 +27,8 @@ ATTITUDE_QUATERNION = 31
 class ControllerNode(IfoNode):
     """
     The controller node provides the main interface to mavros. It provides basic
-    procedures for takeoff, landing, altitude holding, and reaching waypoints.
+    procedures for takeoff, landing, altitude holding, as well as sending 
+    position and velocity commands.
 
     Currently, it is mainly built under the assumption that mocap data is being
     streamed to the drone regularly.
@@ -70,15 +71,15 @@ class ControllerNode(IfoNode):
 
         # --------------------------- Subscribers -----------------------------#
         self.pose_sub = rospy.Subscriber(
-            "mavros/local_position/pose", PoseStamped, self.cb_mavros_pose
+            "mavros/local_position/pose", PoseStamped, self._cb_mavros_pose
         )
         self.velocity_cmd_sub = rospy.Subscriber(
             "controller/velocity_cmd_in",
             PositionTarget,
-            self.cb_velocity_cmd_in,
+            self._cb_velocity_cmd_in,
         )
-        self.takeoff_sub = rospy.Subscriber("controller/takeoff", Bool, self.cb_takeoff)
-        self.land_sub = rospy.Subscriber("controller/land", Bool, self.cb_land)
+        self.takeoff_sub = rospy.Subscriber("controller/takeoff", Bool, self._cb_takeoff)
+        self.land_sub = rospy.Subscriber("controller/land", Bool, self._cb_land)
 
         # ---------------------------- Publishers -----------------------------#
         self.setpoint_pub = rospy.Publisher(
@@ -108,14 +109,14 @@ class ControllerNode(IfoNode):
         self.set_max_xy_speed(0.5)  # TODO: real param.
         self.report_diagnostics(level=0, message="Ready. Idle.")
 
-    def cb_mavros_pose(self, pose_msg):
+    def _cb_mavros_pose(self, pose_msg):
         self.pose = pose_msg
         self.ready_topics["pose"] = True
 
-    def cb_takeoff(self, msg):
+    def _cb_takeoff(self, msg):
         self.takeoff()
 
-    def cb_land(self, msg):
+    def _cb_land(self, msg):
         self.land()
 
     def send_setpoint(self):
@@ -329,8 +330,10 @@ class ControllerNode(IfoNode):
 
     def set_velocity_command(self, vx=0, vy=0, vz=0, yaw_rate=0):
         """
-        Sets the velocity command to the internal setpoint_msg variable.
-        A seperate thread sends the setpoint_msg to the PX4 controller.
+        Sets the velocity command to be sent to the PX4 flight computer. 
+
+        The velocity components are resolved in the BODY FRAME with x-axis 
+        pointing forwards, y-axis to the left, and z-axis upwards.
         """
         self.setpoint_msg.coordinate_frame = PositionTarget.FRAME_BODY_NED
         self.setpoint_msg.type_mask = (
@@ -353,8 +356,8 @@ class ControllerNode(IfoNode):
 
     def set_position_command(self, px=0, py=0, pz=0, yaw=None):
         """
-        Sets the position command to the internal setpoint_msg variable.
-        A seperate thread sends the setpoint_msg to the PX4 controller.
+        Sets the position command to be sent to the PX4 flight computer in 
+        the local world frame.
 
         If yaw is left unspecified, it will be ignored.
         """
@@ -378,10 +381,11 @@ class ControllerNode(IfoNode):
         self.setpoint_msg.position.z = pz
         self.setpoint_msg.yaw = yaw
 
-    def cb_position_cmd_in(self, position_cmd_msg):
+    def _cb_position_cmd_in(self, position_cmd_msg): 
+        # to do.
         pass
 
-    def cb_velocity_cmd_in(self, velocity_cmd_msg):
+    def _cb_velocity_cmd_in(self, velocity_cmd_msg):
         """
         Allows for an external (body frame) velocity command, which will be
         forwarded to mavros.

@@ -17,8 +17,7 @@ as downsampling the frequency (40Hz from 200Hz).
 Moreover, the node implements some basic checks of the validity of mocap data 
 in real time.
 """
-# TODO. Handle not recieving mocap data.
-# TODO. Handle sporadic gaps in mocap data. Kill immediately.
+
 class MocapForwarderNode(IfoNode):
     def __init__(self):
         super(MocapForwarderNode, self).__init__("mocap_forwarder", republish=True)
@@ -171,6 +170,10 @@ class MocapForwarderNode(IfoNode):
         self.set_parameter("EKF2_EV_POS_X", 0.0)
         self.set_parameter("EKF2_EV_POS_Y", 0.0)
         self.set_parameter("EKF2_EV_POS_Z", 0.0)
+        self.set_parameter("EKF2_MAG_TYPE", 5)
+        self.set_parameter("EKF2_MAG_TYPE", 5)
+        self.set_parameter("CAL_MAG0_PRIO", 0)
+        self.set_parameter("CAL_MAG1_PRIO", 0)
         self.set_parameter("MAV_ODOM_LP", 1)
 
         self.wait_for_first_message()
@@ -212,5 +215,3 @@ if __name__ == "__main__":
     node = MocapForwarderNode()
     rospy.on_shutdown(node.shutdown)
     node.start()
-
-    # TODO: need method of re-entering when retrying
