@@ -105,7 +105,7 @@ class ControllerNode(IfoNode):
         self.setpoint_thread.start()
 
         rospy.on_shutdown(self._mavros_shutdown_hook)
-        rospy.sleep(15)
+        rospy.sleep(5)
         self.set_max_xy_speed(0.5)  # TODO: real param.
         self.report_diagnostics(level=0, message="Ready. Idle.")
 
@@ -163,13 +163,13 @@ class ControllerNode(IfoNode):
                 and self._services_online
             ):
                 preflight_passed = True
-                rospy.loginfo("IFO_CORE: Preflight check passed.")
+                rospy.loginfo("IFO_CORE | Preflight check passed.")
                 break
             rate.sleep()
 
         if not preflight_passed:
             # TODO: add reason for failure
-            rospy.logerr("IFO_CORE: Preflight check failed.")
+            rospy.logerr("IFO_CORE | Preflight check failed.")
 
         return preflight_passed
 
@@ -210,7 +210,7 @@ class ControllerNode(IfoNode):
 
             if abs(target_altitude - altitude) < threshold:
                 takeoff_successful = True
-                rospy.loginfo("IFO_CORE: Takeoff successful, altitude reached.")
+                rospy.loginfo("IFO_CORE | Takeoff successful, altitude reached.")
                 self.set_velocity_command(vz=0)
                 break
 
@@ -405,5 +405,6 @@ class ControllerNode(IfoNode):
 
     def _mavros_shutdown_hook(self):
         self.set_rate(HIGHRES_IMU, 50) # Return to original rate.. 
-        self.emergency_land(timeout = 3)
+        if self.extended_state.landed_state == 0:  # 1 for landed, 0 for not landed
+            self.emergency_land(timeout = 3)
 

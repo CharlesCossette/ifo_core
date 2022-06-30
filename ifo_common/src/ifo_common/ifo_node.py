@@ -196,7 +196,7 @@ class IfoNode(object):
                 rospy.logerr(e)
                 return False
 
-    @retry_if_false(timeout=5, freq=5, log_msg="IFO_CORE: landed state confirmed: ")
+    @retry_if_false(timeout=5, freq=5, log_msg="IFO_CORE | landed state confirmed: ")
     def wait_for_landed_state(self):
         if self.extended_state.landed_state == 1:  # 1 for landed, 0 for not landed
             landed_state_confirmed = True
