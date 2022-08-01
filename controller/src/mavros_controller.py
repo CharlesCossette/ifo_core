@@ -15,7 +15,7 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header, Bool
 from threading import Thread
 from ifo_common.ifo_node import IfoNode
-from tf.transformations import euler_from_quaternion
+from pylie import SO3
 
 # Mavlink message IDs
 HIGHRES_IMU = 105
@@ -263,8 +263,8 @@ class ControllerNode(IfoNode):
             pz = self.pose.pose.position.z
         if yaw is None:
             q = self.pose.pose.orientation
-            (r, p, y) = euler_from_quaternion([q.x, q.y, q.z, q.w])
-            yaw = float(y)
+            rpy = SO3.to_euler(SO3.from_quat([q.x, q.y, q.z, q.w]))
+            yaw = float(rpy[-1])
 
         self.set_position_command(px, py, pz, yaw)
 
