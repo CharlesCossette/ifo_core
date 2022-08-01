@@ -14,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_msgs
   roscpp
   rospy
+  geometry_msgs
+  std_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -54,6 +57,10 @@ add_message_files(
   FILES
   Waypoint.msg
   WaypointList.msg
+  RelPosition.msg
+  RelPositionList.msg
+  RelOrientation.msg
+  RelOrientationList.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -72,7 +79,9 @@ add_message_files(
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
-  mavros_msgs
+  mavros_msgs 
+  geometry_msgs 
+  std_msgs
 )
 
 ################################################
@@ -105,6 +114,9 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
+  CATKIN_DEPENDS message_runtime
+) 
+catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES velocity_controller
 #  CATKIN_DEPENDS mavlink mavros mavros_extra mavros_msgs roscpp rospy
@@ -118,7 +130,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+include
   ${catkin_INCLUDE_DIRS}
 )
 
