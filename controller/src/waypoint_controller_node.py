@@ -69,6 +69,9 @@ class WaypointController(ControllerNode):
         # Now go to each remaining waypoint one by one
         remaining_wp_list = waypoint_list[current_wp_idx:]
         for wp in remaining_wp_list:
+            if rospy.is_shutdown():
+                break
+
             sp = wp.setpoint
             self.report_diagnostics(
                 level=0,
@@ -108,7 +111,9 @@ class WaypointController(ControllerNode):
             current_wp_idx = current_wp_idx + 1
 
         # Ideally need feedback logic on reaching waypoint
-        rospy.sleep(3)
+        if not rospy.is_shutdown():
+            rospy.sleep(3)
+
         self.land()
         self.report_diagnostics(level=0, message="Normal. Idle.")
 
