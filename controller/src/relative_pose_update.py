@@ -1,16 +1,10 @@
-# !/usr/bin/env python2
+#!/usr/bin/env python3
 # from mavros_controller import ControllerNode
-from ast import Global
 from binascii import rlecode_hqx
 from socket import IPV6_JOIN_GROUP
-from pandas import Float64Index
 from pyparsing import java_style_comment
 import rospy
-from gazebo_msgs.msg import ModelStates
-from geometry_msgs.msg import Pose, Twist, PoseStamped, TwistStamped
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from std_msgs.msg import String,Int32,Int32MultiArray,MultiArrayLayout,MultiArrayDimension, Float64MultiArray
+from geometry_msgs.msg import PoseStamped
 import numpy as np
 import pylie
 from controller.msg import RelPosition, RelPositionList, RelOrientation, RelOrientationList
@@ -23,7 +17,7 @@ class GetGlobalPose():
         self.topic = topic
         self.traj_pose = rospy.Subscriber(self.topic, PoseStamped, self.callback_pose)
         self._received_first_message = False
-
+        
     def callback_pose(self, pose):
         self._received_first_message = True
         self.pose = pose.pose.position
@@ -42,15 +36,15 @@ class GetGlobalPose():
 
 class ComputeRelativePose():
     
-    def __init__(self, A, r_ia_w, C_ia):
-        self.A = A
+    def __init__(self, no_of_agents, r_ia_w, C_ia):
+        self.no_of_agents = no_of_agents
         self.C_ia = C_ia
         self.r_ia_w = r_ia_w
 
     def relative_dcm(self):
         C_ij_rel={}
-        for i in range(len(self.A)):
-            for j in range(len(self.A[0])):
+        for i in range(self.no_of_agents):
+            for j in range(self.no_of_agents):
                 if(j!=i):
                     C_ij_rel[i,j] = self.C_ia[i] @ self.C_ia[j].T
         return C_ij_rel
@@ -60,9 +54,9 @@ class ComputeRelativePose():
         r_ij_rel_i = {}       # relative displacement between i and j in Fi
         
         # Update relative positions in global and local reference frames
-        for i in range(len(self.A)):
-            for j in range(len(self.A[0])):
-                if (A[i,j]== 1):
+        for i in range(self.no_of_agents):
+            for j in range(self.no_of_agents):
+                if (j!=i):
                     r_ij_rel_g[i,j] = self.r_ia_w[i] - self.r_ia_w[j]
                     r_ij_rel_i[i,j] = self.C_ia[i] @ r_ij_rel_g[i,j]
         return r_ij_rel_i
@@ -74,7 +68,8 @@ class PublishRelativePose():
         self.pub_rel_orientation = rospy.Publisher(rel_orientation_topic, RelOrientationList, queue_size=1)
 
 if __name__ == "__main__":
-
+    
+    # rostopics for relative pose
     rospy.init_node('ifos')
     topics = ["/ifo001/vrpn_client_node/ifo001/pose",
               "/ifo002/vrpn_client_node/ifo002/pose",
@@ -87,17 +82,12 @@ if __name__ == "__main__":
     rel_orientation_topics = ["/ifo001/C_ij",
                               "/ifo002/C_ij",
                               "/ifo003/C_ij"]
-
-    # lapacian matrix
-    L = np.array([[2,-1,-1],
-                  [-1,2,-1],
-                  [-1,-1,2]])
-    # find D and A
-    D = np.diag(np.diag(L))
-    A = D - L
+    
+    no_of_agents = np.size(topics)
 
     receivers = [GetGlobalPose(topic) for topic in topics]
-
+    
+    # allow time to receive messages
     rate = rospy.Rate(100)
     while not rospy.is_shutdown():
         r_ia_w = []
@@ -108,12 +98,14 @@ if __name__ == "__main__":
                 r_ia_w.append(pose[0])
                 C_ia.append(pose[1])
 
-                if (len(r_ia_w) == np.size(topics)):
-                    relative_pose = ComputeRelativePose(A, r_ia_w, C_ia)
+                if (len(r_ia_w) == no_of_agents): # make sure that global poses of all agents get stored
+                    # compute relative poses
+                    relative_pose = ComputeRelativePose(no_of_agents, r_ia_w, C_ia)
                     C_ij_rel = relative_pose.relative_dcm()
                     r_ij_rel_i = relative_pose.relative_positions_in_local_frame()
                     
-                    for i in range(len(A)):
+                    # store and publish in custom message
+                    for i in range(no_of_agents):
                         rel_orientation_list = RelOrientationList()
                         rel_position_list = RelPositionList()
 
@@ -131,7 +123,7 @@ if __name__ == "__main__":
                                 rel_orientation_list.relative_orientation.append(rel_orientation)
                         
                         for r in r_ij_rel_i:
-                            if (A[r]==1 and i==r[0]):
+                            if (i==r[0]):
                                 rel_position = RelPosition()
                                 rel_position.agent_i.data=r[0]
                                 rel_position.agent_j.data=r[1]

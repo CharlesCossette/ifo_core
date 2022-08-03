@@ -1,0 +1,6 @@
+<launch>
+    <arg name="use_vins" default="false"/>
+    <arg name="use_mocap_fusion" default="true"/>
+    
+    <node name="controller_node" output="screen" pkg="controller" type="formation_controller.py"/>
+</launch>

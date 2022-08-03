@@ -1,25 +1,19 @@
-# !/usr/bin/env python2
-# from mavros_controller import ControllerNode
+#!/usr/bin/env python3
 from ast import Global
 from binascii import rlecode_hqx
 from socket import IPV6_JOIN_GROUP
-from pandas import Float64Index
 from pyparsing import java_style_comment
 import rospy
-from gazebo_msgs.msg import ModelStates
-from geometry_msgs.msg import Pose, Twist, PoseStamped, TwistStamped
-import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from std_msgs.msg import String,Int32,Int32MultiArray,MultiArrayLayout,MultiArrayDimension, Float64MultiArray
 import numpy as np
 import pylie
-from controller.msg import RelPosition, RelPositionList, RelOrientation, RelOrientationList
+from controller.msg import RelPositionList, RelOrientationList
 from mavros_controller import ControllerNode
 import formation_and_rotation_control
 import utils
 import relative_pose_update
 np.random.seed(1234)
 
+control=ControllerNode()
 global_pose = relative_pose_update
 func = formation_and_rotation_control.FormationAndRotationControl
 util = utils.Utilities
@@ -77,44 +71,42 @@ class GetRelativeOrientation():
             return None
 
 if __name__ == "__main__":
+    
+    agent_name = rospy.get_namespace()
+    control.takeoff()
+    rospy.sleep(5)
+    if agent_name =='/ifo001/':
+        agent_i = 0
+        control.set_position_command(0, 3, 10, 0)
+    elif agent_name =='/ifo002/':
+        agent_i = 1
+        control.set_position_command(3, 0, 10, 0)
+    elif agent_name =='/ifo003/':
+        agent_i = 2
+        control.set_position_command(-3, 0, 10, 0)
+    rospy.sleep(20)
 
-    rospy.init_node('formation_controller')
-    agent_i = 0 # agent = 0 represents ifo001
-    rel_position_topic = "/ifo001/r_ij_rel_i"
-    rel_orientation_topic = "/ifo001/C_ij"
-    rel_position_receiver = GetRelativePosition(rel_position_topic)
-    rel_orientation_receiver = GetRelativeOrientation(rel_orientation_topic)
-    
-    
-    
     ##### Problem setup #####
     topics = ["/ifo001/vrpn_client_node/ifo001/pose",
               "/ifo002/vrpn_client_node/ifo002/pose",
               "/ifo003/vrpn_client_node/ifo003/pose"]
-
-    # lapacian matrix
-    L = np.array([[2,-1,-1],
-                  [-1,2,-1],
-                  [-1,-1,2]])
-    # find D and A
-    D = np.diag(np.diag(L))
-    A = D - L
-
-    # desired position in Fa
-    r_des_a = np.array([[1,7,-1],
-                        [7,7,-4],
-                        [7,1, 4]])
     
+    no_of_agents = np.size(topics)
+    
+    # desired position in Fa
+    r_des_a = np.array([[0,3,10],
+                        [3,0,10],
+                        [-3,0,10]])
+
     # desired C_ia
     C_ia_star = []
-    for i in range(len(L[0])):
+    for i in range(no_of_agents):
         C_ia_star.append(pylie.SO3.random())
 
     # Angular velocities, i is the individual body frame number
     omega_ia_i    = []
-    for i in range(len(L)):
-        omega_ia_i.append(np.random.rand(3,1))
-
+    for i in range(no_of_agents):
+        omega_ia_i.append(np.block([0,0,0]))
     ###### User Inputs End Here ######
 
     receivers = [global_pose.GetGlobalPose(topic) for topic in topics]
@@ -128,70 +120,25 @@ if __name__ == "__main__":
             break
 
     # Find C_ij_star's
-    C_ij_star_rel = util.relative_dcm(A, C_ia_star)
+    C_ij_star_rel = util.relative_dcm(no_of_agents, C_ia_star)
 
     # find desired distances in global frame and individual body frames
-    r_ij_rel_des_i = util.relative_positions_in_local_frame(A,r_des_a,C_ia)
-
+    r_ij_rel_des_i = util.relative_positions_in_local_frame(no_of_agents,r_des_a,C_ia)
     ##### Problem setup ends here #####
+    
+    # Subsribe to relative position nodes
+    rel_position_topic = "r_ij_rel_i"
+    rel_orientation_topic = "C_ij"
+    rel_position_receiver = GetRelativePosition(rel_position_topic)
+    rel_orientation_receiver = GetRelativeOrientation(rel_orientation_topic)
 
-
-    control = ControllerNode()
-    rate = rospy.Rate(100)
+    # Apply conrol law
+    rate = rospy.Rate(1)
     while not rospy.is_shutdown():
         r_ij_rel_i = rel_position_receiver.get_rel_position()
         C_ij_rel = rel_orientation_receiver.get_rel_orientation()
         if r_ij_rel_i and C_ij_rel is not None:
-            u_iw_i = func.formation_control_gazebo(agent_i, A, r_ij_rel_i, r_ij_rel_des_i)
-            omega_ia_i = func.rotation_control_with_Cij(agent_i, A, C_ij_rel, C_ij_star_rel)
-            control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[3])
-            print(u_iw_i)
+            u_iw_i = func.formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
+            omega_ia_i = func.rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
+            control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2]) #(u_iw_i[0],u_iw_i[1],0,0)
         rate.sleep()
-
-    
-
-
-
-
-    # # obj=GlobalPose()
-    # # obj.sub(i)
-    # # for m in range(np.size(i)):
-    # rospy.sleep(1)
-    # pose0 = GlobalPose(i[0]).global_pose()
-    # pose1 = GlobalPose(i[1]).global_pose()
-    # pose2 = GlobalPose(i[2]).global_pose()
-    # # r_ia_w.append(pose0[0])
-    # # C_ia.append(pose0[1])
-
-    # # r_ia_w, C_ia = pose.global_position()
-    # print(r_ia_w)
-    # print("\n")
-    # print(C_ia)
-    # print("\n")
-    # rospy.spin()
-
-    # rel_pose = RelativePose(A, r_ia_w, C_ia)
-    # r_ij_rel_i = rel_pose.relative_positions_in_local_frame()
-    # C_ij_rel = rel_pose.relative_dcm()
-
-    # print(r_ij_rel_i)
-    # print(node.traj_pose)
-
-
-                        # for i in range(len(A)):
-                    #     rel_orientation_list = RelOrientationList()
-                    #     for C in C_ij_rel:
-                    #         if (i==C[0]):
-                    #             rel_orientation = RelOrientation()
-                    #             rel_orientation.agent_i.data=C[0]
-                    #             rel_orientation.agent_j.data=C[1]
-                                
-                    #             Q_ij = pylie.SO3.to_quat(C_ij_rel[C],order="wxyz")
-                    #             rel_orientation.C_ij_rel.w=Q_ij[0]
-                    #             rel_orientation.C_ij_rel.x=Q_ij[1]
-                    #             rel_orientation.C_ij_rel.y=Q_ij[2]
-                    #             rel_orientation.C_ij_rel.z=Q_ij[3]
-                    #             rel_orientation_list.relative_orientation.append(rel_orientation)
-                                
-                    #     publish_rel_orientation = PublishRelativeOrientation(rel_orientation_topics[i])
-                    #     publish_rel_orientation.pub.publish(rel_orientation_list)

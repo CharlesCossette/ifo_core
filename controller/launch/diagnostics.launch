@@ -1,0 +1,18 @@
+<launch>
+    <arg name="vehicle_name_1" default="ifo001"/>
+    <arg name="vehicle_name_2" default="ifo002"/>
+    <arg name="vehicle_name_3" default="ifo003"/>
+
+    <group ns="$(arg vehicle_name_1)">
+        <include file="$(find ifo_bringup)/launch/diagnostics_forwarder.launch"/>
+    </group>
+
+    <group ns="$(arg vehicle_name_2)">
+        <include file="$(find ifo_bringup)/launch/diagnostics_forwarder.launch"/>
+    </group> 
+
+    <group ns="$(arg vehicle_name_3)">
+        <include file="$(find ifo_bringup)/launch/diagnostics_forwarder.launch"/>
+    </group>
+
+</launch>
