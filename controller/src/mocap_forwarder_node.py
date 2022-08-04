@@ -4,7 +4,7 @@ from mavros_msgs.srv import ParamGet, ParamSet
 from mavros_msgs.msg import ParamValue
 from geometry_msgs.msg import PoseStamped
 from ifo_common.ifo_node import IfoNode
-
+import time
 """
 The mocap forwarder node subscribes to mocap data available on the 
 /ifoXXX/vrpn_client_node/ifoXXX/pose topic, and eventually forwards it to
@@ -53,6 +53,7 @@ class MocapForwarderNode(IfoNode):
         )
         self.pose = None
         self.last_pose = None
+        self.do_shutdown = False
         # Give PX4 some time to be properly initialized before starting.
         rospy.sleep(15)
 
@@ -181,7 +182,7 @@ class MocapForwarderNode(IfoNode):
         loop_freq = 40
         rate = rospy.Rate(loop_freq)
         lost_mocap = False
-        while not rospy.is_shutdown():
+        while not self.do_shutdown:
 
             if rospy.get_time() - self.last_rx_stamp > max_mocap_delay:
                 self.report_diagnostics(
@@ -209,6 +210,9 @@ class MocapForwarderNode(IfoNode):
         """
         for key, value in self.orig_params.items():
             self.set_parameter(key, value)
+            
+        time.sleep(5)
+        self.do_shutdown = True
 
 
 if __name__ == "__main__":
