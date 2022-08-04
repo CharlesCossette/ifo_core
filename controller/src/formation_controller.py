@@ -8,17 +8,14 @@ import numpy as np
 import pylie
 from controller.msg import RelPositionList, RelOrientationList
 from mavros_controller import ControllerNode
-import formation_and_rotation_control
+from formation_and_rotation_control import formation_control, rotation_control
 import utils
 import relative_pose_update
 np.random.seed(1234)
 
-control=ControllerNode()
-global_pose = relative_pose_update
-func = formation_and_rotation_control.FormationAndRotationControl
-util = utils.Utilities
 
-class GetRelativePosition():
+
+class RelativePositionGetter():
 
     def __init__(self, rel_position_topic):
 
@@ -43,7 +40,7 @@ class GetRelativePosition():
         else:
             return None
 
-class GetRelativeOrientation():
+class RelativeOrientationGetter():
 
     def __init__(self, rel_orientation_topic):
 
@@ -71,6 +68,7 @@ class GetRelativeOrientation():
             return None
 
 if __name__ == "__main__":
+    control=ControllerNode()
     
     agent_name = rospy.get_namespace()
     control.takeoff()
@@ -91,7 +89,7 @@ if __name__ == "__main__":
               "/ifo002/vrpn_client_node/ifo002/pose",
               "/ifo003/vrpn_client_node/ifo003/pose"]
     
-    no_of_agents = np.size(topics)
+    no_of_agents = len(topics)
     
     # desired position in Fa
     r_des_a = np.array([[0,3,10],
@@ -109,36 +107,37 @@ if __name__ == "__main__":
         omega_ia_i.append(np.block([0,0,0]))
     ###### User Inputs End Here ######
 
-    receivers = [global_pose.GetGlobalPose(topic) for topic in topics]
-    C_ia = []
-    while not rospy.is_shutdown():
-        for receiver in receivers:
-            pose = receiver.get_global_pose()
-            if pose is not None:
-                C_ia.append(pose[1])
-        if (len(C_ia) == np.size(topics)):
-            break
+    receivers = [relative_pose_update.GetGlobalPose(topic) for topic in topics]
+    C_ia  = []
+    rate = rospy.Rate(50)
+    for recv in receivers:
+        pose = None 
+        while pose is None and not rospy.is_shutdown():
+            pose = recv.get_global_pose() 
+            rate.sleep()
+
+        C_ia.append(pose[1])
 
     # Find C_ij_star's
-    C_ij_star_rel = util.relative_dcm(no_of_agents, C_ia_star)
+    C_ij_star_rel = utils.relative_dcm(no_of_agents, C_ia_star)
 
     # find desired distances in global frame and individual body frames
-    r_ij_rel_des_i = util.relative_positions_in_local_frame(no_of_agents,r_des_a,C_ia)
+    r_ij_rel_des_i = utils.relative_positions_in_local_frame(no_of_agents,r_des_a,C_ia)
     ##### Problem setup ends here #####
     
     # Subsribe to relative position nodes
     rel_position_topic = "r_ij_rel_i"
     rel_orientation_topic = "C_ij"
-    rel_position_receiver = GetRelativePosition(rel_position_topic)
-    rel_orientation_receiver = GetRelativeOrientation(rel_orientation_topic)
+    rel_position_receiver = RelativePositionGetter(rel_position_topic)
+    rel_orientation_receiver = RelativeOrientationGetter(rel_orientation_topic)
 
     # Apply conrol law
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(100)
     while not rospy.is_shutdown():
         r_ij_rel_i = rel_position_receiver.get_rel_position()
         C_ij_rel = rel_orientation_receiver.get_rel_orientation()
         if r_ij_rel_i and C_ij_rel is not None:
-            u_iw_i = func.formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
-            omega_ia_i = func.rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
+            u_iw_i = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
+            omega_ia_i = rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
             control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2]) #(u_iw_i[0],u_iw_i[1],0,0)
         rate.sleep()

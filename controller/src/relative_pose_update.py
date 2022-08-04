@@ -61,11 +61,11 @@ class ComputeRelativePose():
                     r_ij_rel_i[i,j] = self.C_ia[i] @ r_ij_rel_g[i,j]
         return r_ij_rel_i
 
-class PublishRelativePose():
+# class PublishRelativePose():
 
-    def __init__(self, rel_position_topic, rel_orientation_topic):
-        self.pub_rel_position = rospy.Publisher(rel_position_topic, RelPositionList, queue_size=1)
-        self.pub_rel_orientation = rospy.Publisher(rel_orientation_topic, RelOrientationList, queue_size=1)
+#     def __init__(self, rel_position_topic, rel_orientation_topic):
+#         self.pub_rel_position = rospy.Publisher(rel_position_topic, RelPositionList, queue_size=1)
+#         self.pub_rel_orientation = rospy.Publisher(rel_orientation_topic, RelOrientationList, queue_size=1)
 
 if __name__ == "__main__":
     
@@ -86,7 +86,12 @@ if __name__ == "__main__":
     no_of_agents = np.size(topics)
 
     receivers = [GetGlobalPose(topic) for topic in topics]
-    
+    pub_rel_position = []
+    pub_rel_orientation = []
+    for i in range(no_of_agents):
+        pub_rel_position.append(rospy.Publisher(rel_position_topics[i], RelPositionList, queue_size=1))
+        pub_rel_orientation.append(rospy.Publisher(rel_orientation_topics[i], RelOrientationList, queue_size=1))
+
     # allow time to receive messages
     rate = rospy.Rate(100)
     while not rospy.is_shutdown():
@@ -133,8 +138,8 @@ if __name__ == "__main__":
                                 rel_position.r_ij_rel_i.z=r_ij_rel_i[r][2]
                                 rel_position_list.relative_position.append(rel_position)
                                 
-                        publish_rel_position = PublishRelativePose(rel_position_topics[i], rel_orientation_topics[i])
-                        publish_rel_position.pub_rel_position.publish(rel_position_list)
-                        publish_rel_position.pub_rel_orientation.publish(rel_orientation_list)
+                        
+                        pub_rel_position[i].publish(rel_position_list)
+                        pub_rel_orientation[i].publish(rel_orientation_list)
 
         rate.sleep()
