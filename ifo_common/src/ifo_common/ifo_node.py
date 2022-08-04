@@ -169,7 +169,7 @@ class IfoNode(object):
             try:
                 res = self.set_mode_srv(0, mode)  # 0 is custom mode
                 if not res.mode_sent:
-                    rospy.logerr("IFO_CORE: failed to send mode command.")
+                    rospy.logerr("IFO CORE | failed to send mode command.")
                     return False
                 else:
                     return True
@@ -196,7 +196,7 @@ class IfoNode(object):
                 rospy.logerr(e)
                 return False
 
-    @retry_if_false(timeout=5, freq=5, log_msg="IFO_CORE: landed state confirmed: ")
+    @retry_if_false(timeout=5, freq=5, log_msg="IFO CORE | landed state confirmed: ")
     def wait_for_landed_state(self):
         if self.extended_state.landed_state == 1:  # 1 for landed, 0 for not landed
             landed_state_confirmed = True

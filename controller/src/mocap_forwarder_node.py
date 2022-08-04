@@ -78,7 +78,7 @@ class MocapForwarderNode(IfoNode):
         the original parameter value for possible resetting later.
         """
         rospy.loginfo(
-            "IFO_CORE: Setting FCU parameter " + param_id + " to: " + str(value)
+            "IFO CORE | Setting FCU parameter " + param_id + " to: " + str(value)
         )
 
         # Create legit ParamValue message.
@@ -89,7 +89,7 @@ class MocapForwarderNode(IfoNode):
             param_value.real = value
 
         # Get and save the original value
-        orig_value, get_success = self.get_parameter(param_id)
+        orig_value, get_success = self.get_parameter(param_id, timeout=1)
         if isinstance(value, int):
             orig_value = orig_value.integer
         else:
@@ -98,7 +98,7 @@ class MocapForwarderNode(IfoNode):
             if param_id not in self.orig_params:
                 self.orig_params[param_id] = orig_value
         else:
-            rospy.loginfo("IFO_CORE: Setting FCU parameter " + param_id + ": FAILED")
+            rospy.loginfo("IFO CORE | Setting FCU parameter " + param_id + ": FAILED")
             return False
 
         # Loop until the setting is done, with timeout
@@ -116,7 +116,7 @@ class MocapForwarderNode(IfoNode):
                 value_check = value_check.real
             if value_check == value:
                 rospy.loginfo(
-                    "IFO_CORE: Setting FCU parameter " + param_id + ": SUCCESS"
+                    "IFO CORE | Setting FCU parameter " + param_id + ": SUCCESS"
                 )
                 set_success = True
                 break
@@ -124,16 +124,16 @@ class MocapForwarderNode(IfoNode):
             count = count + 1
 
         if not set_success:
-            rospy.loginfo("IFO_CORE: Setting FCU parameter " + param_id + ": FAILED")
+            rospy.loginfo("IFO CORE | Setting FCU parameter " + param_id + ": FAILED")
         return set_success
 
-    def get_parameter(self, param_id, timeout=10):
+    def get_parameter(self, param_id, timeout=10, freq=2):
         """
         Reads a PX4 parameter value.
         """
-        loop_freq = 2  # Hz
-        rate = rospy.Rate(loop_freq)
-        for i in range(timeout * loop_freq):
+        freq = 2  # Hz
+        rate = rospy.Rate(freq)
+        for i in range(timeout * freq):
             resp = self.get_param_srv(param_id)
             if resp.success:
                 break
@@ -144,7 +144,10 @@ class MocapForwarderNode(IfoNode):
         """
         Waits eternally until the first pose message is obtained.
         """
-        self.report_diagnostics(level=1, message="Waiting for mocap data.")
+        
+        if self.pose is None:
+            self.report_diagnostics(level=1, message="Waiting for mocap data.")
+
         if timeout is None:
             timeout = 999999.0
 
@@ -173,8 +176,16 @@ class MocapForwarderNode(IfoNode):
         self.set_parameter("EKF2_EV_POS_Z", 0.0)
         self.set_parameter("EKF2_MAG_TYPE", 5)
         self.set_parameter("EKF2_MAG_TYPE", 5)
-        self.set_parameter("CAL_MAG0_PRIO", 0)
-        self.set_parameter("CAL_MAG1_PRIO", 0)
+
+        _, success = self.get_parameter("CAL_MAG0_PRIO", timeout=1, freq=2)
+
+        if success:
+            self.set_parameter("CAL_MAG0_PRIO", 0)
+            self.set_parameter("CAL_MAG1_PRIO", 0)
+        else: 
+            self.set_parameter("CAL_MAG0_EN", 0)
+            self.set_parameter("CAL_MAG1_EN", 0)
+            
         self.set_parameter("MAV_ODOM_LP", 1)
 
         self.wait_for_first_message()
@@ -208,10 +219,9 @@ class MocapForwarderNode(IfoNode):
         Gets executed on shutdown. Resets the PX4 parameters that were set by
         this node.
         """
+        self.emergency_land(timeout = 8)
         for key, value in self.orig_params.items():
             self.set_parameter(key, value)
-            
-        time.sleep(5)
         self.do_shutdown = True
 
 
