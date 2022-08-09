@@ -1,6 +1,4 @@
-import math
 import numpy as np
-import scipy.linalg
 import pylie
 
 def formation_control(i,no_of_agents,r_ij_rel_i, r_ij_rel_des_i):
@@ -13,7 +11,7 @@ def formation_control(i,no_of_agents,r_ij_rel_i, r_ij_rel_des_i):
 
     # kp
     kp = 0.1
-    kc = 100
+    kc = 1
     u_iw_i = np.zeros([1,3])
     for j in range(no_of_agents):
         if (j!=i):
@@ -26,7 +24,7 @@ def formation_control(i,no_of_agents,r_ij_rel_i, r_ij_rel_des_i):
 
 def rotation_control(i, no_of_agents, C_ij, C_ij_star):
         
-    kj = 100
+    kj = 1
     # update w's for attitude control
     omega_ia_i = np.zeros([3,1])
     for j in range(no_of_agents):

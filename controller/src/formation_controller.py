@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-from ast import Global
-from binascii import rlecode_hqx
-from socket import IPV6_JOIN_GROUP
-from pyparsing import java_style_comment
 import rospy
 import numpy as np
 import pylie
@@ -12,7 +8,6 @@ from formation_and_rotation_control import formation_control, rotation_control
 import utils
 from relative_pose_update import GlobalPoseGetter
 np.random.seed(1234)
-
 
 class RelativePositionGetter():
 
@@ -73,13 +68,13 @@ if __name__ == "__main__":
     rospy.sleep(5)
     if agent_name =='/ifo001/':
         agent_i = 0
-        control.set_position_command(0, 3, 5, 0)
+        control.set_position_command(1, 4, 1.5, 0)
     elif agent_name =='/ifo002/':
         agent_i = 1
-        control.set_position_command(3, 0, 5, 0)
+        control.set_position_command(3, -2, 1.5, 0)
     elif agent_name =='/ifo003/':
         agent_i = 2
-        control.set_position_command(-3, 0, 5, 0)
+        control.set_position_command(-3, -3, 1.5, 0)
     rospy.sleep(10)
 
     ##### Problem setup #####
@@ -90,14 +85,14 @@ if __name__ == "__main__":
     no_of_agents = len(topics)
     
     # desired position in Fa
-    r_des_a = np.array([[0,2,5],
-                        [2,0,5],
-                        [-2,0,5]])
+    r_des_a = np.array([[0,0,1.5],
+                        [3/2,np.sqrt(3)/2*3,1.5],
+                        [3,0,1.5]])
 
     # desired C_ia
     C_ia_star = []
     for i in range(no_of_agents):
-        C_ia_star.append(np.eye(3))
+        C_ia_star.append(pylie.SO3.from_euler([0,0,45*i/180*3.142]))
 
     # Angular velocities, i is the individual body frame number
     omega_ia_i    = []
@@ -107,7 +102,7 @@ if __name__ == "__main__":
 
     receivers = [GlobalPoseGetter(topic) for topic in topics]
     C_ia = []
-    rate = rospy.Rate(1000)
+    rate = rospy.Rate(100)
     for receiver in receivers:
         pose = None 
         while pose is None and not rospy.is_shutdown():
@@ -130,12 +125,12 @@ if __name__ == "__main__":
     rel_orientation_receiver = RelativeOrientationGetter(rel_orientation_topic)
 
     # Apply conrol law
-    rate = rospy.Rate(1000)
+    rate = rospy.Rate(100)
     while not rospy.is_shutdown():
         r_ij_rel_i = rel_position_receiver.get_rel_position()
         C_ij_rel = rel_orientation_receiver.get_rel_orientation()
-        if r_ij_rel_i and C_ij_rel is not None:
+        if r_ij_rel_i is not None and C_ij_rel is not None:
             u_iw_i = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
             omega_ia_i = rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
-            control.set_velocity_command(u_iw_i[0],u_iw_i[1],0,0) #(u_iw_i[0],u_iw_i[1],0,0)
+            control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2])
         rate.sleep()
