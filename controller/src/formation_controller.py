@@ -7,7 +7,6 @@ from mavros_controller import ControllerNode
 from formation_and_rotation_control import formation_control, rotation_control
 import utils
 from relative_pose_update import GlobalPoseGetter
-np.random.seed(1234)
 
 class RelativePositionGetter():
 
@@ -64,17 +63,19 @@ class RelativeOrientationGetter():
 if __name__ == "__main__":
     control=ControllerNode()    
     agent_name = rospy.get_namespace()
+
+    # set initial positions
     control.takeoff()
     rospy.sleep(5)
     if agent_name =='/ifo001/':
-        agent_i = 0
-        control.set_position_command(1, 4, 1.5, 0)
+        agent_i=0
+        control.set_position_command(4, -3, 1.5, 0)
     elif agent_name =='/ifo002/':
-        agent_i = 1
-        control.set_position_command(3, -2, 1.5, 0)
+        agent_i=1
+        control.set_position_command(1.5, 5, 1.5, 0)
     elif agent_name =='/ifo003/':
-        agent_i = 2
-        control.set_position_command(-3, -3, 1.5, 0)
+        agent_i=2
+        control.set_position_command(-3, -5, 1.5, 0)
     rospy.sleep(10)
 
     ##### Problem setup #####
@@ -85,19 +86,15 @@ if __name__ == "__main__":
     no_of_agents = len(topics)
     
     # desired position in Fa
-    r_des_a = np.array([[0,0,1.5],
-                        [3/2,np.sqrt(3)/2*3,1.5],
-                        [3,0,1.5]])
+    r_des_a = np.array([[2/2,np.sqrt(3)/2*2,1.5],
+                        [0,0,1.5],
+                        [2,0,1.5]])
 
     # desired C_ia
     C_ia_star = []
     for i in range(no_of_agents):
         C_ia_star.append(pylie.SO3.from_euler([0,0,45*i/180*3.142]))
 
-    # Angular velocities, i is the individual body frame number
-    omega_ia_i    = []
-    for i in range(no_of_agents):
-        omega_ia_i.append(np.block([0,0,0]))
     ###### User Inputs End Here ######
 
     receivers = [GlobalPoseGetter(topic) for topic in topics]
@@ -133,4 +130,6 @@ if __name__ == "__main__":
             u_iw_i = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
             omega_ia_i = rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
             control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2])
+            if np.linalg.norm(u_iw_i) <1e-2 and np.linalg.norm(omega_ia_i) < 1e-2:
+                print('reached formation')
         rate.sleep()

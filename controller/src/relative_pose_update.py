@@ -84,7 +84,8 @@ if __name__ == "__main__":
         pub_rel_orientation.append(rospy.Publisher(rel_orientation_topics[i], RelOrientationList, queue_size=1))
     
     # allow time to receive messages
-    rate = rospy.Rate(1000)
+    rate = rospy.Rate(100)
+    print('Node running...')
     while not rospy.is_shutdown():
         r_ia_w = []
         C_ia = []
