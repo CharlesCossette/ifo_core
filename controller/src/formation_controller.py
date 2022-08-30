@@ -69,13 +69,13 @@ if __name__ == "__main__":
     rospy.sleep(5)
     if agent_name =='/ifo001/':
         agent_i=0
-        control.set_position_command(4, -3, 1.5, 0)
+        control.set_position_command(2, -3, 1.5, 0)
     elif agent_name =='/ifo002/':
         agent_i=1
-        control.set_position_command(1.5, 5, 1.5, 0)
+        control.set_position_command(4, 3, 1.5, 0)
     elif agent_name =='/ifo003/':
         agent_i=2
-        control.set_position_command(-3, -5, 1.5, 0)
+        control.set_position_command(-3, -4, 1.5, 0)
     rospy.sleep(10)
 
     ##### Problem setup #####
@@ -130,6 +130,8 @@ if __name__ == "__main__":
             u_iw_i = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
             omega_ia_i = rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
             control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2])
-            if np.linalg.norm(u_iw_i) <1e-2 and np.linalg.norm(omega_ia_i) < 1e-2:
+            if np.linalg.norm(u_iw_i) <1e-1 and np.linalg.norm(omega_ia_i) < 1e-1:
                 print('reached formation')
+            else:
+                print('did not reach formation yet')
         rate.sleep()
