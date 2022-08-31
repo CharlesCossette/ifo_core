@@ -180,11 +180,11 @@ class MocapForwarderNode(IfoNode):
         _, success = self.get_parameter("CAL_MAG0_PRIO", timeout=1, freq=2)
 
         if success:
-            self.set_parameter("CAL_MAG0_PRIO", 0)
-            self.set_parameter("CAL_MAG1_PRIO", 0)
+            self.set_parameter("CAL_MAG0_PRIO", 0, timeout=2)
+            self.set_parameter("CAL_MAG1_PRIO", 0, timeout=2)
         else: 
-            self.set_parameter("CAL_MAG0_EN", 0)
-            self.set_parameter("CAL_MAG1_EN", 0)
+            self.set_parameter("CAL_MAG0_EN", 0, timeout=2)
+            self.set_parameter("CAL_MAG1_EN", 0, timeout=2)
             
         self.set_parameter("MAV_ODOM_LP", 1)
 
