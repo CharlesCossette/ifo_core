@@ -103,7 +103,9 @@ class WaypointController(ControllerNode):
                     sp.yaw,
                 ),
             )
-            success = self.reach_waypoint(wp, timeout=10)
+
+            # TODO: apply some smarter timeout... 
+            success = self.reach_waypoint(wp, timeout=20)
             if not success:
                 self.report_diagnostics(level=1, message="Failed to reach waypoint. Aborting mission.")
                 break
