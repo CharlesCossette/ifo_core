@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 from threading import local
 import rospy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue

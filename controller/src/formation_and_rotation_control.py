@@ -20,11 +20,11 @@ def formation_control(i,no_of_agents,r_ij_rel_i, r_ij_rel_des_i):
     # Bound the control effort based on magnitude
     u_iw_i = kc*(u_iw_i/np.linalg.norm(u_iw_i)) if np.linalg.norm(u_iw_i) > kc else u_iw_i
         
-    return u_iw_i
+    return (u_iw_i.reshape(-1,1)), (list(r_ij_star.values()))
 
 def rotation_control(i, no_of_agents, C_ij, C_ij_star):
         
-    kj = 1
+    kj = 0.04
     # update w's for attitude control
     omega_ia_i = np.zeros([3,1])
     for j in range(no_of_agents):

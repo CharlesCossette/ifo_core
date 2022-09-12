@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import rospy
 from mavros_msgs.srv import ParamGet, ParamSet
 from mavros_msgs.msg import ParamValue

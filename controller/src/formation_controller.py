@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+from curses.textpad import rectangle
+import math
+from modulefinder import replacePackageMap
 import rospy
 import numpy as np
 import pylie
@@ -7,6 +10,7 @@ from mavros_controller import ControllerNode
 from formation_and_rotation_control import formation_control, rotation_control
 import utils
 from relative_pose_update import GlobalPoseGetter
+from geometry_msgs.msg import TwistStamped
 
 class RelativePositionGetter():
 
@@ -55,8 +59,25 @@ class RelativeOrientationGetter():
                 y = relative_orientation.C_ij_rel.y
                 z = relative_orientation.C_ij_rel.z
                 Q_ij = np.array([w,x,y,z])
-                C_ij_rel[i,j] = pylie.SO3.from_quat(Q_ij,order="wxyz")
+                C_ij_rel[i,j] = pylie.SO3.from_quat(Q_ij,order="wxyz").T
             return C_ij_rel
+        else:
+            return None
+
+class GlobalTwistGetter():
+    def __init__(self, topic):
+        self.topic = topic
+        self.traj_twist = rospy.Subscriber(self.topic, TwistStamped, self.callback_twist)
+        self._received_first_message = False
+        
+    def callback_twist(self, twist):
+        self._received_first_message = True
+        self.twist = twist.twist.linear
+
+    def get_global_twist(self):
+        if self._received_first_message:
+            u_ia_w = np.array([self.twist.x,self.twist.y,self.twist.z])
+            return u_ia_w
         else:
             return None
 
@@ -89,6 +110,14 @@ if __name__ == "__main__":
     r_des_a = np.array([[2/2,np.sqrt(3)/2*2,1.5],
                         [0,0,1.5],
                         [2,0,1.5]])
+    # Set Position
+    x = 7 
+    y = -7
+    z = 1.5
+    yaw = 0
+    leader_twist_topic = "/ifo001/twist_node/ifo001/twist"
+    leader_twist_receiver = GlobalTwistGetter(leader_twist_topic)
+    leader_twist = None
 
     # desired C_ia
     C_ia_star = []
@@ -123,14 +152,32 @@ if __name__ == "__main__":
 
     # Apply conrol law
     rate = rospy.Rate(100)
+    reached_formation = False
     while not rospy.is_shutdown():
         r_ij_rel_i = rel_position_receiver.get_rel_position()
         C_ij_rel = rel_orientation_receiver.get_rel_orientation()
+        leader_twist = leader_twist_receiver.get_global_twist()
+        # Apply control law
         if r_ij_rel_i is not None and C_ij_rel is not None:
-            u_iw_i = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i).reshape(-1,1)
+            u_iw_i, r_ij_star = formation_control(agent_i, no_of_agents, r_ij_rel_i, r_ij_rel_des_i)
             omega_ia_i = rotation_control(agent_i, no_of_agents, C_ij_rel, C_ij_star_rel)
             control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2])
-            if np.linalg.norm(u_iw_i) <1e-1 and np.linalg.norm(omega_ia_i) < 1e-1:
+            
+            # Set position controller 
+            # Ensure formation is maintained
+            if np.linalg.norm(r_ij_star) < 0.5:
+                reached_formation = True
+                if agent_name == "/ifo001/":
+                    # Set position of leader
+                    control.set_position_command(x,y,z,yaw)
+                else:
+                    # Set velocity of follower
+                    u_iw_i = leader_twist.reshape(-1,1)
+                    control.set_velocity_command(u_iw_i[0],u_iw_i[1],u_iw_i[2],omega_ia_i[2])
+            else:
+                reached_formation = False
+                
+            if reached_formation == True:
                 print('reached formation')
             else:
                 print('did not reach formation yet')

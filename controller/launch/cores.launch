@@ -15,4 +15,6 @@
         <include file="$(find controller)/launch/formation_controller.launch"/>
     </group>
 
+    <node name="relative_pose_node" output="screen" pkg="controller" type="relative_pose_update.py"/>
+
 </launch>

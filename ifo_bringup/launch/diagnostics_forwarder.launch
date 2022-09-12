@@ -1,6 +1,7 @@
 <launch>
     <arg name="use_vins" default="false"/>
     <arg name="use_mocap_fusion" default="true"/>
+    <arg name="use_twist_node" default="true"/>
 
     <node name="local_diagnostics" output="screen" pkg="local_diagnostics" 
         type="local_diagnostics_node.py"/>
@@ -8,5 +9,10 @@
     <group if="$(arg use_mocap_fusion)">
         <node name="mocap_forwarder" output="screen" pkg="controller" 
             type="mocap_forwarder_node.py"/>
+    </group>
+
+    <group if="$(arg use_twist_node)">
+        <node name="twist_node" output="screen" pkg="controller" 
+            type="twist_pub_node.py"/>
     </group>
 </launch>
