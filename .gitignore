@@ -52,3 +52,5 @@ Thumbs.db
 .*.py
 .*.launch
 controller/src/dev/
+
+.vscode/
